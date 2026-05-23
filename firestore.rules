@@ -1,42 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow anyone to read products (for browsing the marketplace)
-    match /products/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+
+    // Products: any authenticated user can read and write
+    match /products/{productId} {
+      allow read, write: if request.auth != null;
     }
 
-    // Allow authenticated users to access their own user data
+    // Users: authenticated users can only access their own profile
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read: if false; // Prevent listing all users
     }
 
-    // Allow authenticated users to create and manage orders
+    // Stores: any authenticated user can read and write
+    match /stores/{storeId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Orders: authenticated users can create; owners can read/update their own
     match /orders/{orderId} {
       allow create: if request.auth != null;
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, write: if request.auth != null
+                         && request.auth.uid == resource.data.userId;
     }
 
-    // Allow authenticated users to manage their cart
+    // Carts: owners only
     match /carts/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow public read access to categories
+    // Categories: any authenticated user can read and write
     match /categories/{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+      allow read, write: if request.auth != null;
     }
 
-    // Allow authenticated users to read their transactions
+    // Transactions: owners can read, no client writes
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow write: if false; // Managed by backend only
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+      allow write: if false;
     }
 
-    // Deny all other access by default
+    // Deny everything else
     match /{document=**} {
       allow read, write: if false;
     }

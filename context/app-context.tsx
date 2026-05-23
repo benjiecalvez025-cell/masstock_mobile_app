@@ -5,11 +5,11 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "@/services/firebase.config";
 
 let AsyncStorage: any = null;
 try {
-  // Avoid hard crash if native module isn't available on some setups/platforms
-   
   AsyncStorage = require("@react-native-async-storage/async-storage").default;
 } catch {
   AsyncStorage = null;
@@ -67,6 +67,7 @@ export function AppProvider({ children }: PropsWithChildren) {
 
   const logout = async () => {
     try {
+      await signOut(auth);
       if (AsyncStorage) {
         await AsyncStorage.removeItem("token");
         await AsyncStorage.removeItem("user");
@@ -78,43 +79,45 @@ export function AppProvider({ children }: PropsWithChildren) {
     }
   };
 
+  // Drive user state from Firebase Auth — this fires on app start (restoring
+  // persisted session) and on every sign-in / sign-out.
   useEffect(() => {
-    const loadUser = async () => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        setLoading(true);
-
-        if (!AsyncStorage) {
+        if (firebaseUser) {
+          // Auth is confirmed — enrich with cached profile from AsyncStorage
+          let profile: any = {};
+          if (AsyncStorage) {
+            const raw = await AsyncStorage.getItem("user");
+            if (raw) profile = JSON.parse(raw);
+          }
+          setUserState({
+            id: firebaseUser.uid,
+            name:
+              profile.name ||
+              `${profile.firstName || ""} ${profile.lastName || ""}`.trim() ||
+              firebaseUser.displayName ||
+              "User",
+            email: firebaseUser.email || profile.email || "",
+            phone: profile.phone || "",
+            ewallet: profile.eWallet ?? profile.ewallet ?? 0,
+          });
+        } else {
+          // No Firebase Auth session — clear state and storage
           setUserState(null);
-          return;
+          if (AsyncStorage) {
+            await AsyncStorage.multiRemove(["token", "user"]);
+          }
         }
-
-        const userRaw = await AsyncStorage.getItem("user");
-        if (!userRaw) {
-          setUserState(null);
-          return;
-        }
-
-        const parsed = JSON.parse(userRaw);
-
-        setUserState({
-          id: parsed.id,
-          name:
-            parsed.name ||
-            `${parsed.firstName || ""} ${parsed.lastName || ""}`.trim() ||
-            "User",
-          email: parsed.email,
-          phone: parsed.phone || "",
-          ewallet: parsed.eWallet ?? parsed.ewallet ?? 0,
-        });
       } catch (error) {
-        console.error("Error loading user from storage:", error);
+        console.error("Error syncing auth state:", error);
         setUserState(null);
       } finally {
         setLoading(false);
       }
-    };
+    });
 
-    loadUser();
+    return unsubscribe;
   }, []);
 
   const value: AppContextType = {

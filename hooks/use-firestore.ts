@@ -27,6 +27,9 @@ import {
     updateProductStock,
     updateStore,
     createProduct,
+    deleteProduct,
+    updateProduct,
+    claimUnownedProducts,
 } from "@/services/firestore-enhanced";
 import { Timestamp } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -265,12 +268,12 @@ export function useStore(userId?: string) {
     const loadStore = async () => {
       try {
         setLoading(true);
-        const storeData = await getStoreProfile(userId);
-        if (storeData) {
-          setStore(storeData);
-          const storeProducts = await getStoreProducts(userId);
-          setProducts(storeProducts);
-        }
+        const [storeData, storeProducts] = await Promise.all([
+          getStoreProfile(userId),
+          getStoreProducts(userId),
+        ]);
+        if (storeData) setStore(storeData);
+        setProducts(storeProducts);
         setError(null);
       } catch (err) {
         console.error("Error loading store:", err);
@@ -334,6 +337,36 @@ export function useStore(userId?: string) {
     }
   };
 
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      await deleteProduct(productId);
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
+      setError(null);
+    } catch (err) {
+      console.error("Error deleting product:", err);
+      setError("Failed to delete product");
+    }
+  };
+
+  const handleUpdateProduct = async (
+    productId: string,
+    data: Partial<Omit<ProductData, "id">>,
+  ) => {
+    try {
+      await updateProduct(productId, data);
+      const updated = await getProduct(productId);
+      if (updated) {
+        setProducts((prev) =>
+          prev.map((p) => (p.id === productId ? updated : p)),
+        );
+      }
+      setError(null);
+    } catch (err) {
+      console.error("Error updating product:", err);
+      setError("Failed to update product");
+    }
+  };
+
   const handleLoadStoreOrders = async () => {
     try {
       if (!userId) throw new Error("User not authenticated");
@@ -394,6 +427,17 @@ export function useStore(userId?: string) {
     createProduct: handleCreateProduct,
     updateProductPrice: handleUpdateProductPrice,
     updateProductStock: handleUpdateProductStock,
+    deleteProduct: handleDeleteProduct,
+    updateProduct: handleUpdateProduct,
+    claimProducts: async () => {
+      if (!userId) return 0;
+      const count = await claimUnownedProducts(userId);
+      if (count > 0) {
+        const storeProducts = await getStoreProducts(userId);
+        setProducts(storeProducts);
+      }
+      return count;
+    },
   };
 }
 

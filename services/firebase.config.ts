@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
@@ -14,9 +14,9 @@ const DEFAULT_FIREBASE_CONFIG = {
   authDomain: "masstock-app.firebaseapp.com",
   projectId: "masstock-app",
   storageBucket: "masstock-app.appspot.com",
-  messagingSenderId: "105365672865418221",
-  appId: "1:105365672865418221:web:8d9b7c6e5f4a3b2c1d0e",
-  measurementId: "G-MASSTOCK-APP",
+  messagingSenderId: "1048213734901",
+  appId: "1:1048213734901:web:ee709f87b02cd48d518cbc",
+  measurementId: "G-SW1RX3GEE6",
 };
 
 const firebaseConfig = {
@@ -46,7 +46,7 @@ const firebaseConfig = {
     DEFAULT_FIREBASE_CONFIG.appId,
   measurementId:
     process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID ||
-    expoExtra.EXPO_PUBLIC_MEASUREMENT_ID ||
+    expoExtra.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID ||
     DEFAULT_FIREBASE_CONFIG.measurementId,
 };
 
@@ -60,36 +60,15 @@ if (missingRequiredFields) {
   );
 }
 
-let firebaseAppConfig = firebaseConfig;
-let app;
-
-try {
-  app = initializeApp(firebaseConfig);
-} catch (error) {
-  console.warn(
-    "Firebase initializeApp failed with resolved config. Retrying default config.",
-    error,
-  );
-  app = initializeApp(DEFAULT_FIREBASE_CONFIG);
-  firebaseAppConfig = DEFAULT_FIREBASE_CONFIG;
-}
+// Reuse the existing app instance on hot reload
+const app = getApps().length === 0
+  ? initializeApp(firebaseConfig)
+  : getApp();
 
 // Initialize services
-export const db = getFirestore(app);
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Enable emulators in development (optional)
-if (process.env.NODE_ENV === 'development') {
-  // Uncomment these lines to use Firebase emulators locally
-  // connectFirestoreEmulator(db, 'localhost', 8080);
-  // connectAuthEmulator(auth, 'http://localhost:9099');
-  // connectStorageEmulator(storage, 'localhost', 9199);
-}
-
-if (__DEV__) {
-  console.log("Resolved Firebase config:", firebaseAppConfig);
-}
-
-export const resolvedFirebaseConfig = firebaseAppConfig;
+export { firebaseConfig as resolvedFirebaseConfig };
 export default app;

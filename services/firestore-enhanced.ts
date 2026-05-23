@@ -6,6 +6,7 @@
 import {
     addDoc,
     collection,
+    deleteDoc,
     doc,
     getDoc,
     getDocs,
@@ -52,6 +53,18 @@ export async function addToCart(
   userId: string,
   item: CartItemData,
 ): Promise<void> {
+  // Firestore rejects undefined — normalise every field to a safe default
+  const safeItem: CartItemData = {
+    productId: item.productId ?? "",
+    name: item.name ?? "",
+    category: item.category ?? "",
+    price: item.price ?? 0,
+    quantity: item.quantity ?? 1,
+    image: item.image ?? "",
+    minOrder: item.minOrder ?? 1,
+    stock: item.stock ?? 0,
+  };
+
   try {
     const cartRef = doc(db, "carts", userId);
     const snapshot = await getDoc(cartRef);
@@ -60,19 +73,19 @@ export async function addToCart(
       const cart = snapshot.data();
       const items = cart.items || [];
       const existingIndex = items.findIndex(
-        (i: CartItemData) => i.productId === item.productId,
+        (i: CartItemData) => i.productId === safeItem.productId,
       );
 
       if (existingIndex >= 0) {
-        items[existingIndex].quantity += item.quantity;
+        items[existingIndex].quantity += safeItem.quantity;
       } else {
-        items.push(item);
+        items.push(safeItem);
       }
 
       await updateDoc(cartRef, { items, updatedAt: Timestamp.now() });
     } else {
       await setDoc(cartRef, {
-        items: [item],
+        items: [safeItem],
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
@@ -288,13 +301,9 @@ export async function updateStore(
   }
 }
 
-export async function getStoreProducts(userId: string): Promise<any[]> {
+export async function getStoreProducts(_userId?: string): Promise<any[]> {
   try {
-    const q = query(
-      collection(db, "products"),
-      where("sellerId", "==", userId),
-    );
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(collection(db, "products"));
     return snapshot.docs.map((doc: FirestoreDoc) => ({
       id: doc.id,
       ...doc.data(),
@@ -571,6 +580,52 @@ export async function searchProducts(
       );
   } catch (error) {
     console.error("Error searching products:", error);
+    throw error;
+  }
+}
+
+// Assigns sellerId to every product that doesn't have one yet.
+// Run once per user to claim products that were imported without a sellerId.
+export async function claimUnownedProducts(userId: string): Promise<number> {
+  try {
+    const snapshot = await getDocs(collection(db, "products"));
+    const unclaimed = snapshot.docs.filter(
+      (d) => !d.data().sellerId,
+    );
+    await Promise.all(
+      unclaimed.map((d) =>
+        updateDoc(doc(db, "products", d.id), {
+          sellerId: userId,
+          updatedAt: Timestamp.now(),
+        }),
+      ),
+    );
+    return unclaimed.length;
+  } catch (error) {
+    console.error("Error claiming products:", error);
+    throw error;
+  }
+}
+
+export async function deleteProduct(productId: string): Promise<void> {
+  try {
+    const productRef = doc(db, "products", productId);
+    await deleteDoc(productRef);
+  } catch (error) {
+    console.error("Error deleting product:", error);
+    throw error;
+  }
+}
+
+export async function updateProduct(
+  productId: string,
+  data: Partial<Omit<ProductData, "id">>,
+): Promise<void> {
+  try {
+    const productRef = doc(db, "products", productId);
+    await updateDoc(productRef, { ...data, updatedAt: Timestamp.now() });
+  } catch (error) {
+    console.error("Error updating product:", error);
     throw error;
   }
 }

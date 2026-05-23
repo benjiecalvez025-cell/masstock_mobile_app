@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,719 +14,928 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Header } from "@/components/header";
-import { Colors, Shadows, Spacing, Typography } from "@/constants/theme";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Colors, Shadows, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppContext } from "@/context/app-context";
 import { useStore } from "@/hooks/use-firestore";
 import { useRouter } from "expo-router";
+import { Timestamp } from "firebase/firestore";
 
-interface InventoryEditState {
-  stock?: string;
-  retailPrice?: string;
-  wholesalePrice?: string;
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface ProductForm {
+  name: string;
+  category: string;
+  brand: string;
+  description: string;
+  retailPrice: string;
+  wholesalePrice: string;
+  stock: string;
+  minOrder: string;
+  image: string;
 }
 
-const placeholderImage = (title: string) =>
-  `https://via.placeholder.com/300?text=${encodeURIComponent(title)}`;
+const EMPTY_FORM: ProductForm = {
+  name: "",
+  category: "",
+  brand: "",
+  description: "",
+  retailPrice: "",
+  wholesalePrice: "",
+  stock: "",
+  minOrder: "",
+  image: "",
+};
+
+const placeholder = (title: string) =>
+  `https://via.placeholder.com/300?text=${encodeURIComponent(title || "Product")}`;
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function StoreScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
   const router = useRouter();
   const { user } = useAppContext();
+
   const {
     store,
     products,
     loading,
     error,
     createProduct,
-    updateProductPrice,
-    updateProductStock,
+    updateProduct,
+    deleteProduct,
   } = useStore(user?.id);
 
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [inventoryModalVisible, setInventoryModalVisible] = useState(false);
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    name: "",
-    category: "",
-    brand: "",
-    description: "",
-    retailPrice: "",
-    wholesalePrice: "",
-    stock: "",
-    minOrder: "",
-    image: "",
-  });
-  const [inventoryEdits, setInventoryEdits] = useState<Record<string, InventoryEditState>>({});
   const [imageSizeWarning, setImageSizeWarning] = useState<string | null>(null);
-  const [selectedImageSize, setSelectedImageSize] = useState<number | null>(null);
 
-  const featuredProducts = products?.slice(0, 3) ?? [];
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const categories = useMemo(
+    () => ["All", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))],
+    [products],
+  );
 
-  const activeListings = products?.length ?? 0;
-  const storeName = store?.name || "My Store";
+  const filteredProducts = useMemo(() => {
+    const q = search.toLowerCase();
+    return products.filter((p) => {
+      const matchesSearch =
+        !q ||
+        (p.name ?? "").toLowerCase().includes(q) ||
+        (p.brand ?? "").toLowerCase().includes(q) ||
+        (p.category ?? "").toLowerCase().includes(q);
+      const matchesCat = selectedCategory === "All" || p.category === selectedCategory;
+      return matchesSearch && matchesCat;
+    });
+  }, [products, search, selectedCategory]);
 
-  if (!user) {
-    return (
-      <ScrollView
-        style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Header
-          title="Store Dashboard"
-          subtitle="Sign in to access your seller tools"
-        />
+  const stats = useMemo(
+    () => ({
+      total: products.length,
+      inStock: products.filter((p) => (p.stock ?? 0) > 0).length,
+      outOfStock: products.filter((p) => (p.stock ?? 0) === 0).length,
+    }),
+    [products],
+  );
 
-        <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Welcome to your store</Text>
-          <Text style={[styles.cardDescription, { color: colors.textSecondary, marginBottom: Spacing.md }]}>You need to be signed in to add products, manage inventory, and view your store dashboard.</Text>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary }]}
-            onPress={() => router.push("/auth/login")}
-          >
-            <Text style={styles.actionText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    );
-  }
-  const handleChangeNewProduct = (field: string, value: string) => {
-    setNewProduct((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const MAX_PRODUCT_IMAGE_MB = 5;
-
-  const validateImageAsset = (asset: ImagePicker.ImagePickerAsset) => {
-    const sizeBytes = asset.fileSize;
-    if (!sizeBytes) {
-      setImageSizeWarning(null);
-      setSelectedImageSize(null);
-      return true;
-    }
-
-    const sizeMb = sizeBytes / (1024 * 1024);
-    setSelectedImageSize(sizeMb);
-    if (sizeMb > MAX_PRODUCT_IMAGE_MB) {
-      setImageSizeWarning(`Selected image is too large (${sizeMb.toFixed(1)} MB). Please choose an image under ${MAX_PRODUCT_IMAGE_MB} MB.`);
-      return false;
-    }
-
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const openAdd = () => {
+    setForm(EMPTY_FORM);
+    setEditingProduct(null);
     setImageSizeWarning(null);
-    return true;
+    setModalVisible(true);
   };
 
-  const handlePickProductImage = async () => {
+  const openEdit = (product: any) => {
+    setForm({
+      name: product.name ?? "",
+      category: product.category ?? "",
+      brand: product.brand ?? "",
+      description: product.description ?? "",
+      retailPrice: String(product.retailPrice ?? ""),
+      wholesalePrice: String(product.wholesalePrice ?? ""),
+      stock: String(product.stock ?? ""),
+      minOrder: String(product.minOrder ?? ""),
+      image: product.image ?? "",
+    });
+    setEditingProduct(product);
+    setImageSizeWarning(null);
+    setModalVisible(true);
+  };
+
+  const handleDelete = (product: any) => {
+    Alert.alert(
+      "Delete Product",
+      `Remove "${product.name}" from your inventory? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteProduct?.(product.id),
+        },
+      ],
+    );
+  };
+
+  const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "Please grant access to your photo library to select a product image.");
+      Alert.alert("Permission required", "Please grant access to your photo library.");
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.7,
     });
-
-    if (!result.canceled && result.assets.length > 0) {
+    if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      if (!validateImageAsset(asset)) {
+      const sizeMb = (asset.fileSize ?? 0) / (1024 * 1024);
+      if (sizeMb > 5) {
+        setImageSizeWarning(`Image is too large (${sizeMb.toFixed(1)} MB). Use an image under 5 MB.`);
         return;
       }
-      setNewProduct((prev) => ({ ...prev, image: asset.uri }));
+      setImageSizeWarning(null);
+      setForm((prev) => ({ ...prev, image: asset.uri }));
     }
   };
 
-  const handleTakeProductPhoto = async () => {
+  const handleTakePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "Please grant camera access to take a product photo.");
+      Alert.alert("Permission required", "Please grant camera access.");
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       quality: 0.7,
     });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      if (!validateImageAsset(asset)) {
-        return;
-      }
-      setNewProduct((prev) => ({ ...prev, image: asset.uri }));
+    if (!result.canceled && result.assets[0]) {
+      setImageSizeWarning(null);
+      setForm((prev) => ({ ...prev, image: result.assets[0].uri }));
     }
   };
 
-  const handleSubmitNewProduct = async () => {
-    const retailPrice = Number(newProduct.retailPrice);
-    const wholesalePrice = Number(newProduct.wholesalePrice);
-    const stock = Number(newProduct.stock);
-    const minOrder = Number(newProduct.minOrder);
+  const handleSubmit = async () => {
+    const retailPrice = Number(form.retailPrice);
+    const wholesalePrice = Number(form.wholesalePrice);
+    const stock = Number(form.stock);
+    const minOrder = Number(form.minOrder);
 
-    if (
-      !newProduct.name.trim() ||
-      !newProduct.category.trim() ||
-      isNaN(retailPrice) ||
-      isNaN(wholesalePrice) ||
-      isNaN(stock) ||
-      isNaN(minOrder)
-    ) {
+    if (!form.name.trim() || !form.category.trim()) {
+      Alert.alert("Validation", "Product name and category are required.");
+      return;
+    }
+    if (isNaN(retailPrice) || isNaN(wholesalePrice) || isNaN(stock) || isNaN(minOrder)) {
+      Alert.alert("Validation", "Please enter valid numbers for price, stock, and minimum order.");
       return;
     }
 
-    setIsSubmitting(true);
-    const productPayload = {
-      name: newProduct.name.trim(),
-      category: newProduct.category.trim(),
-      brand: newProduct.brand.trim() || "General",
-      description: newProduct.description.trim() || "",
+    const payload = {
+      name: form.name.trim(),
+      category: form.category.trim(),
+      brand: form.brand.trim() || "General",
+      description: form.description.trim() || "",
       retailPrice,
       wholesalePrice,
       stock,
       minOrder,
-      image: newProduct.image.trim() || placeholderImage(newProduct.name),
+      image: form.image.trim() || placeholder(form.name),
       featured: false,
+      updatedAt: Timestamp.now(),
     };
 
-    const success = await createProduct?.(productPayload as any);
-    setIsSubmitting(false);
-
-    if (success) {
-      setAddModalVisible(false);
-      setNewProduct({
-        name: "",
-        category: "",
-        brand: "",
-        description: "",
-        retailPrice: "",
-        wholesalePrice: "",
-        stock: "",
-        minOrder: "",
-        image: "",
-      });
+    setIsSubmitting(true);
+    try {
+      if (editingProduct) {
+        await updateProduct?.(editingProduct.id, payload);
+      } else {
+        await createProduct?.(payload as any);
+      }
+      setModalVisible(false);
+      setForm(EMPTY_FORM);
+      setEditingProduct(null);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleInventoryEditChange = (
-    productId: string,
-    field: keyof InventoryEditState,
-    value: string,
-  ) => {
-    setInventoryEdits((prev) => ({
-      ...prev,
-      [productId]: {
-        ...prev[productId],
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleSaveInventoryItem = async (product: any) => {
-    const edit = inventoryEdits[product.id] || {};
-    const stock = edit.stock !== undefined ? Number(edit.stock) : product.stock;
-    const retailPrice =
-      edit.retailPrice !== undefined
-        ? Number(edit.retailPrice)
-        : product.retailPrice;
-    const wholesalePrice =
-      edit.wholesalePrice !== undefined
-        ? Number(edit.wholesalePrice)
-        : product.wholesalePrice;
-
-    if (isNaN(stock) || stock < 0) {
-      return;
-    }
-
-    await updateProductStock?.(product.id, stock);
-
-    if (!isNaN(retailPrice) && !isNaN(wholesalePrice)) {
-      await updateProductPrice?.(product.id, retailPrice, wholesalePrice);
-    }
-
-    setInventoryEdits((prev) => ({
-      ...prev,
-      [product.id]: {
-        ...prev[product.id],
-        stock: String(stock),
-        retailPrice: String(retailPrice),
-        wholesalePrice: String(wholesalePrice),
-      },
-    }));
-  };
-
-  const renderInventoryItem = ({ item }: { item: any }) => {
-    const edits = inventoryEdits[item.id] || {};
+  // ── Not logged in ─────────────────────────────────────────────────────────
+  if (!user) {
     return (
-      <View style={[styles.inventoryCard, { backgroundColor: colors.background }]}> 
-        <View style={styles.inventoryHeader}>
-          <View style={[styles.inventoryAvatar, { backgroundColor: colors.surface }]}> 
-            <Image
-              source={{ uri: item.image || placeholderImage(item.name) }}
-              style={styles.inventoryImage}
-            />
-          </View>
-          <View style={styles.inventoryInfo}>
-            <Text style={[styles.inventoryName, { color: colors.text }]} numberOfLines={1}>
-              {item.name}
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <MaterialIcons name="store" size={64} color={colors.textSecondary} />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to manage your store</Text>
+        <TouchableOpacity
+          style={[styles.ctaButton, { backgroundColor: colors.primary }]}
+          onPress={() => router.push("/auth/login")}
+        >
+          <Text style={styles.ctaText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Render product card ───────────────────────────────────────────────────
+  const renderProduct = ({ item }: { item: any }) => {
+    const inStock = (item.stock ?? 0) > 0;
+    return (
+      <View style={[styles.productCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
+        <Image
+          source={{ uri: item.image || placeholder(item.name) }}
+          style={styles.productImage}
+          resizeMode="cover"
+        />
+        <View style={styles.productInfo}>
+          <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={[styles.productCategory, { color: colors.primary }]} numberOfLines={1}>
+            {item.category}{item.brand ? ` · ${item.brand}` : ""}
+          </Text>
+          <View style={styles.priceRow}>
+            <Text style={[styles.priceWholesale, { color: colors.text }]}>
+              ₱{(item.wholesalePrice ?? 0).toLocaleString()}
             </Text>
-            <Text style={[styles.inventoryMeta, { color: colors.textSecondary }]}>Category: {item.category}</Text>
-            <Text style={[styles.inventoryMeta, { color: colors.textSecondary }]}>Stock: {item.stock}</Text>
+            <Text style={[styles.priceRetail, { color: colors.textSecondary }]}>
+              ₱{(item.retailPrice ?? 0).toLocaleString()} retail
+            </Text>
           </View>
-        </View>
-        <View style={styles.inventoryFieldRow}>
-          <View style={styles.inventoryField}>
-            <Text style={[styles.inlineLabel, { color: colors.textSecondary }]}>Stock</Text>
-            <TextInput
-              style={[styles.textInput, { backgroundColor: colors.surface, color: colors.text }]}
-              value={edits.stock ?? String(item.stock)}
-              keyboardType="number-pad"
-              onChangeText={(value) => handleInventoryEditChange(item.id, "stock", value)}
-            />
-          </View>
-          <View style={styles.inventoryField}>
-            <Text style={[styles.inlineLabel, { color: colors.textSecondary }]}>Wholesale</Text>
-            <TextInput
-              style={[styles.textInput, { backgroundColor: colors.surface, color: colors.text }]}
-              value={edits.wholesalePrice ?? String(item.wholesalePrice)}
-              keyboardType="number-pad"
-              onChangeText={(value) => handleInventoryEditChange(item.id, "wholesalePrice", value)}
-            />
-          </View>
-          <View style={styles.inventoryField}>
-            <Text style={[styles.inlineLabel, { color: colors.textSecondary }]}>Retail</Text>
-            <TextInput
-              style={[styles.textInput, { backgroundColor: colors.surface, color: colors.text }]}
-              value={edits.retailPrice ?? String(item.retailPrice)}
-              keyboardType="number-pad"
-              onChangeText={(value) => handleInventoryEditChange(item.id, "retailPrice", value)}
-            />
-          </View>
-        </View>
-        <View style={styles.inventoryFooter}>
-          <TouchableOpacity
-            style={[styles.inventorySaveButton, { backgroundColor: colors.primary }]}
-            onPress={() => handleSaveInventoryItem(item)}
+          <View
+            style={[
+              styles.stockBadge,
+              { backgroundColor: inStock ? "#E8F5E9" : "#FFEBEE" },
+            ]}
           >
-            <Text style={styles.actionText}>Save</Text>
+            <MaterialIcons
+              name={inStock ? "check-circle" : "cancel"}
+              size={12}
+              color={inStock ? "#388E3C" : "#D32F2F"}
+            />
+            <Text
+              style={[
+                styles.stockText,
+                { color: inStock ? "#388E3C" : "#D32F2F" },
+              ]}
+            >
+              {inStock ? `${item.stock} in stock` : "Out of stock"}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.productActions}>
+          <TouchableOpacity
+            style={[styles.actionIcon, { backgroundColor: colors.accentBg ?? "#EEF2FF" }]}
+            onPress={() => openEdit(item)}
+          >
+            <MaterialIcons name="edit" size={18} color={colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionIcon, { backgroundColor: "#FFEBEE" }]}
+            onPress={() => handleDelete(item)}
+          >
+            <MaterialIcons name="delete-outline" size={18} color="#D32F2F" />
           </TouchableOpacity>
         </View>
       </View>
     );
   };
 
-  return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      <Header
-        title="Store Dashboard"
-        subtitle={store ? `Welcome back, ${storeName}` : "Set up your seller profile"}
-      />
-
-      <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Store Snapshot</Text>
-        <View style={styles.statsRow}>
-          <View style={[styles.statItem, { backgroundColor: colors.background }]}> 
-            <Text style={[styles.statValue, { color: colors.primary }]}>{activeListings}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active listings</Text>
-          </View>
-          <View style={[styles.statItem, { backgroundColor: colors.background }]}> 
-            <Text style={[styles.statValue, { color: colors.primary }]}>{store?.rating ? store.rating.toFixed(1) : "–"}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Store rating</Text>
-          </View>
-        </View>
+  // Only results count + error go in ListHeaderComponent — no interactive elements
+  // so re-mounts are harmless and don't dismiss the keyboard.
+  const renderListHeader = () => (
+    <>
+      <View style={styles.resultsRow}>
+        <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
+          {filteredProducts.length} product{filteredProducts.length !== 1 ? "s" : ""}
+          {search ? ` for "${search}"` : ""}
+          {selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}
+        </Text>
       </View>
-
-      <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Top Actions</Text>
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary }]}
-            onPress={() => setAddModalVisible(true)}
-          > 
-            <Text style={styles.actionText}>Add New Product</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.accent }]}
-            onPress={() => setInventoryModalVisible(true)}
-          > 
-            <Text style={styles.actionText}>Manage Inventory</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {featuredProducts.length > 0 && (
-        <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Recent Products</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.productScroll} contentContainerStyle={styles.productScrollContent}>
-            {featuredProducts.map((product) => (
-              <View key={product.id} style={[styles.productPreview, { backgroundColor: colors.background }]}> 
-                <Image
-                  source={{ uri: product.image || placeholderImage(product.name) }}
-                  style={styles.previewImage}
-                />
-                <View style={styles.previewText}>
-                  <Text style={[styles.previewName, { color: colors.text }]} numberOfLines={1}>
-                    {product.name}
-                  </Text>
-                  <Text style={[styles.previewMeta, { color: colors.textSecondary }]}>Stock: {product.stock}</Text>
-                  <Text style={[styles.previewMeta, { color: colors.textSecondary }]}>₱{product.wholesalePrice.toLocaleString()}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Seller Tip</Text>
-        <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>Keep your top-selling products stocked, refresh wholesale pricing often, and make every listing easy to reorder.</Text>
-      </View>
-
       {error ? (
-        <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-          <Text style={[styles.cardDescription, { color: colors.danger }]}>{error}</Text>
+        <View style={[styles.errorBanner, { backgroundColor: "#FFEBEE" }]}>
+          <MaterialIcons name="error-outline" size={16} color="#D32F2F" />
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
+    </>
+  );
 
-      {loading && (
-        <View style={[styles.card, { backgroundColor: colors.surface }]}> 
-          <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>Loading store details…</Text>
+  const renderEmpty = () => {
+    if (loading) return null;
+    return (
+      <View style={styles.emptyState}>
+        <MaterialIcons name="inventory-2" size={56} color={colors.textSecondary} />
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          {search || selectedCategory !== "All" ? "No products match" : "No products yet"}
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+          {search || selectedCategory !== "All"
+            ? "Try adjusting your search or filter."
+            : "Add your first product to start selling."}
+        </Text>
+      </View>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────────────────────
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Top bar */}
+      <View style={[styles.topBar, { backgroundColor: colors.primary }]}>
+        <View>
+          <Text style={styles.topBarTitle}>Store Inventory</Text>
+          <Text style={styles.topBarSub}>{store?.name ?? "My Store"}</Text>
         </View>
+        <TouchableOpacity style={styles.addButton} onPress={openAdd}>
+          <MaterialIcons name="add" size={20} color={colors.primary} />
+          <Text style={[styles.addButtonText, { color: colors.primary }]}>Add Product</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Stats — stable, outside FlatList */}
+      <View style={styles.statsRow}>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
+          <Text style={[styles.statValue, { color: colors.primary }]}>{stats.total}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Products</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
+          <Text style={[styles.statValue, { color: "#388E3C" }]}>{stats.inStock}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>In Stock</Text>
+        </View>
+        <View style={[styles.statCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
+          <Text style={[styles.statValue, { color: "#D32F2F" }]}>{stats.outOfStock}</Text>
+          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Out of Stock</Text>
+        </View>
+      </View>
+
+      {/* Search — stable, outside FlatList so keyboard never dismisses on re-render */}
+      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border ?? "#e0e0e0" }]}>
+        <MaterialIcons name="search" size={20} color={colors.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Search products..."
+          placeholderTextColor={colors.textSecondary}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Category chips — stable ScrollView, scroll position never resets */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
+        keyboardShouldPersistTaps="handled"
+      >
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: selectedCategory === cat ? colors.primary : colors.surface,
+                borderColor: selectedCategory === cat ? colors.primary : (colors.border ?? "#e0e0e0"),
+              },
+            ]}
+            onPress={() => setSelectedCategory(cat)}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                { color: selectedCategory === cat ? "#fff" : colors.text },
+              ]}
+            >
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {loading && products.length === 0 ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading inventory...
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredProducts}
+          keyExtractor={(item, i) => item.id ?? `product-${i}`}
+          renderItem={renderProduct}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        />
       )}
 
-      <Modal visible={addModalVisible} animationType="slide" transparent>
+      {/* Add / Edit Modal */}
+      {modalVisible && (
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalShell}
+          style={styles.modalOverlay}
         >
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}> 
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Add New Product</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {[
-                { label: "Product Name", field: "name" },
-                { label: "Category", field: "category" },
-                { label: "Brand", field: "brand" },
-                { label: "Description", field: "description" },
-                { label: "Retail Price", field: "retailPrice", keyboardType: "number-pad" },
-                { label: "Wholesale Price", field: "wholesalePrice", keyboardType: "number-pad" },
-                { label: "Stock", field: "stock", keyboardType: "number-pad" },
-                { label: "Minimum Order", field: "minOrder", keyboardType: "number-pad" },
-                { label: "Image URL", field: "image", keyboardType: "default" },
-              ].map((input) => (
-                <View key={input.field} style={styles.inputGroup}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{input.label}</Text>
+          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {editingProduct ? "Edit Product" : "Add New Product"}
+              </Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <MaterialIcons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+              {/* Image preview */}
+              {form.image ? (
+                <Image
+                  source={{ uri: form.image }}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[styles.imagePlaceholder, { backgroundColor: colors.background }]}>
+                  <MaterialIcons name="image" size={40} color={colors.textSecondary} />
+                  <Text style={[styles.imagePlaceholderText, { color: colors.textSecondary }]}>
+                    No image selected
+                  </Text>
+                </View>
+              )}
+
+              {imageSizeWarning ? (
+                <Text style={styles.warnText}>{imageSizeWarning}</Text>
+              ) : null}
+
+              <View style={styles.imageButtons}>
+                <TouchableOpacity
+                  style={[styles.imageBtn, { backgroundColor: colors.primary }]}
+                  onPress={handlePickImage}
+                >
+                  <MaterialIcons name="photo-library" size={16} color="#fff" />
+                  <Text style={styles.imageBtnText}>Gallery</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.imageBtn, { backgroundColor: colors.accent ?? colors.primary }]}
+                  onPress={handleTakePhoto}
+                >
+                  <MaterialIcons name="camera-alt" size={16} color="#fff" />
+                  <Text style={styles.imageBtnText}>Camera</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Form fields */}
+              {(
+                [
+                  { label: "Product Name *", field: "name", keyboard: "default" },
+                  { label: "Category *", field: "category", keyboard: "default" },
+                  { label: "Brand", field: "brand", keyboard: "default" },
+                  { label: "Description", field: "description", keyboard: "default", multiline: true },
+                  { label: "Retail Price (₱) *", field: "retailPrice", keyboard: "decimal-pad" },
+                  { label: "Wholesale Price (₱) *", field: "wholesalePrice", keyboard: "decimal-pad" },
+                  { label: "Stock Quantity *", field: "stock", keyboard: "number-pad" },
+                  { label: "Minimum Order *", field: "minOrder", keyboard: "number-pad" },
+                  { label: "Image URL (optional)", field: "image", keyboard: "default" },
+                ] as Array<{ label: string; field: keyof ProductForm; keyboard: string; multiline?: boolean }>
+              ).map(({ label, field, keyboard, multiline }) => (
+                <View key={field} style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
                   <TextInput
-                    style={[styles.textInput, { backgroundColor: colors.background, color: colors.text }]}
-                    value={newProduct[input.field as keyof typeof newProduct]}
-                    keyboardType={input.keyboardType as any}
-                    onChangeText={(text) => handleChangeNewProduct(input.field, text)}
-                    multiline={input.field === "description"}
+                    style={[
+                      styles.fieldInput,
+                      { backgroundColor: colors.background, color: colors.text, borderColor: colors.border ?? "#e0e0e0" },
+                      multiline && { height: 72, textAlignVertical: "top" },
+                    ]}
+                    value={form[field]}
+                    keyboardType={keyboard as any}
+                    multiline={multiline}
+                    onChangeText={(v) => setForm((prev) => ({ ...prev, [field]: v }))}
+                    placeholder={label.replace(" *", "")}
+                    placeholderTextColor={colors.textSecondary}
                   />
                 </View>
               ))}
-              {newProduct.image ? (
-                <View style={styles.imagePreviewWrapper}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Selected Image</Text>
-                  <Image
-                    source={{ uri: newProduct.image }}
-                    style={styles.productImagePreview}
-                  />
-                  {selectedImageSize !== null ? (
-                    <Text style={[styles.imageHint, { color: colors.textSecondary }]}>Size: {selectedImageSize.toFixed(1)} MB</Text>
-                  ) : null}
-                </View>
-              ) : null}
-              <Text style={[styles.imageHint, { color: colors.textSecondary }]}>Best before: {MAX_PRODUCT_IMAGE_MB} MB, clear product photo, and high contrast.</Text>
-              {imageSizeWarning ? (
-                <Text style={[styles.warningText, { color: colors.danger }]}>{imageSizeWarning}</Text>
-              ) : null}
-              <TouchableOpacity
-                style={[styles.imageButton, { backgroundColor: colors.accent }]}
-                onPress={handlePickProductImage}
-              >
-                <Text style={styles.actionText}>Select Product Image</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.imageButton, { backgroundColor: colors.primary }]}
-                onPress={handleTakeProductPhoto}
-              >
-                <Text style={styles.actionText}>Take Product Photo</Text>
-              </TouchableOpacity>
+
+              <View style={{ height: 16 }} />
             </ScrollView>
-            <View style={styles.modalActions}>
+
+            <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.cancelButton, { backgroundColor: colors.background }]}
-                onPress={() => setAddModalVisible(false)}
+                style={[styles.footerBtn, { backgroundColor: colors.background }]}
+                onPress={() => setModalVisible(false)}
               >
-                <Text style={[styles.actionText, { color: colors.text }]}>Cancel</Text>
+                <Text style={[styles.footerBtnText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: colors.primary, opacity: isSubmitting ? 0.7 : 1 }]}
-                onPress={handleSubmitNewProduct}
+                style={[
+                  styles.footerBtn,
+                  styles.footerBtnPrimary,
+                  { backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 },
+                ]}
+                onPress={handleSubmit}
                 disabled={isSubmitting}
               >
-                <Text style={styles.actionText}>Create Product</Text>
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.footerBtnTextWhite}>
+                    {editingProduct ? "Save Changes" : "Create Product"}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal visible={inventoryModalVisible} animationType="slide" transparent>
-        <View style={styles.modalShell}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}> 
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Manage Inventory</Text>
-            <FlatList
-              data={products}
-              keyExtractor={(item, index) => item.id ?? `product-${index}`}
-              renderItem={renderInventoryItem}
-              contentContainerStyle={styles.inventoryList}
-            />
-            <TouchableOpacity
-              style={[styles.cancelButton, { backgroundColor: colors.background, alignSelf: "center" }]}
-              onPress={() => setInventoryModalVisible(false)}
-            >
-              <Text style={[styles.actionText, { color: colors.text }]}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
+      )}
+    </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  container: { flex: 1 },
+
+  // Top bar
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.lg,
   },
-  content: {
-    paddingBottom: Spacing.xxxl,
-  },
-  card: {
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    padding: Spacing.lg,
-    borderRadius: 20,
-    ...Shadows.md,
-  },
-  cardTitle: {
-    fontSize: Typography.fontSizes.xl,
+  topBarTitle: {
+    fontSize: Typography.fontSizes.xxl,
     fontWeight: Typography.fontWeights.bold,
-    marginBottom: Spacing.md,
+    color: "#fff",
   },
+  topBarSub: {
+    fontSize: Typography.fontSizes.sm,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 2,
+  },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 20,
+    gap: 4,
+  },
+  addButtonText: {
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.bold,
+  },
+
+  // List
+  listContent: { paddingBottom: 100 },
+
+  // Stats
   statsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
   },
-  statItem: {
+  statCard: {
     flex: 1,
-    padding: Spacing.md,
-    borderRadius: 16,
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
   },
   statValue: {
-    fontSize: Typography.fontSizes.xxxl,
+    fontSize: Typography.fontSizes.xxl,
     fontWeight: Typography.fontWeights.extrabold,
   },
   statLabel: {
-    marginTop: Spacing.xs,
-    fontSize: Typography.fontSizes.sm,
+    fontSize: Typography.fontSizes.xs,
+    marginTop: 2,
   },
-  actionRow: {
+
+  // Search
+  searchBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "center",
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
     gap: Spacing.sm,
   },
-  actionButton: {
+  searchInput: {
     flex: 1,
     paddingVertical: Spacing.md,
+    fontSize: Typography.fontSizes.md,
+  },
+
+  // Category chips
+  chipRow: {
     paddingHorizontal: Spacing.lg,
-    borderRadius: 18,
-    marginBottom: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Shadows.sm,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
   },
-  actionText: {
-    color: "#fff",
-    fontWeight: Typography.fontWeights.semibold,
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  cardDescription: {
+  chipText: {
     fontSize: Typography.fontSizes.sm,
-    lineHeight: 20,
+    fontWeight: Typography.fontWeights.medium,
   },
-  productScroll: {
-    marginTop: Spacing.sm,
-  },
-  productScrollContent: {
+
+  // Results
+  resultsRow: {
+    paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
-  productPreview: {
-    width: 220,
+  resultsText: {
+    fontSize: Typography.fontSizes.sm,
+  },
+
+  // Import banner
+  importBanner: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.sm,
-    borderRadius: 20,
-    marginRight: Spacing.md,
+    marginHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
-    ...Shadows.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: "#E3F2FD",
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: "#90CAF9",
   },
-  previewImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 16,
-    marginRight: Spacing.md,
+  importTitle: {
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.bold,
+    color: "#1565C0",
   },
-  previewText: {
+  importSub: {
+    fontSize: Typography.fontSizes.xs,
+    color: "#1976D2",
+    marginTop: 2,
+  },
+
+  // Error banner
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.xs,
+  },
+  errorText: {
+    fontSize: Typography.fontSizes.sm,
+    color: "#D32F2F",
     flex: 1,
   },
-  previewName: {
+
+  // Product card
+  productCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+  },
+  productImage: {
+    width: 80,
+    height: 80,
+  },
+  productInfo: {
+    flex: 1,
+    padding: Spacing.sm,
+  },
+  productName: {
     fontSize: Typography.fontSizes.md,
     fontWeight: Typography.fontWeights.semibold,
   },
-  previewMeta: {
+  productCategory: {
     fontSize: Typography.fontSizes.xs,
-    marginTop: Spacing.xs,
+    marginTop: 2,
   },
-  modalShell: {
-    flex: 1,
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  priceWholesale: {
+    fontSize: Typography.fontSizes.md,
+    fontWeight: Typography.fontWeights.bold,
+  },
+  priceRetail: {
+    fontSize: Typography.fontSizes.xs,
+    textDecorationLine: "line-through",
+  },
+  stockBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    marginTop: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 20,
+    gap: 3,
+  },
+  stockText: {
+    fontSize: Typography.fontSizes.xs,
+    fontWeight: Typography.fontWeights.semibold,
+  },
+  productActions: {
+    padding: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  actionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
   },
-  modalContent: {
-    margin: Spacing.lg,
-    borderRadius: 24,
-    padding: Spacing.lg,
-    maxHeight: "90%",
+
+  // Empty / loading states
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: Typography.fontSizes.md,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingTop: Spacing.xxxl,
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: Typography.fontSizes.xl,
+    fontWeight: Typography.fontWeights.bold,
+    marginTop: Spacing.lg,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: Typography.fontSizes.md,
+    marginTop: Spacing.sm,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  ctaButton: {
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: 20,
+  },
+  ctaText: {
+    color: "#fff",
+    fontWeight: Typography.fontWeights.bold,
+    fontSize: Typography.fontSizes.md,
+  },
+
+  // Modal
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "92%",
+    paddingTop: Spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
   },
   modalTitle: {
     fontSize: Typography.fontSizes.xl,
     fontWeight: Typography.fontWeights.bold,
-    marginBottom: Spacing.md,
   },
-  inputGroup: {
-    marginBottom: Spacing.md,
+  modalScroll: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
   },
-  inputLabel: {
-    fontSize: Typography.fontSizes.sm,
-    marginBottom: Spacing.xs,
-  },
-  textInput: {
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    fontSize: Typography.fontSizes.sm,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: Spacing.md,
-  },
-  cancelButton: {
-    padding: Spacing.md,
-    borderRadius: 16,
-    minWidth: 120,
-    alignItems: "center",
-  },
-  saveButton: {
-    padding: Spacing.md,
-    borderRadius: 16,
-    minWidth: 120,
-    alignItems: "center",
-  },
-  imagePreviewWrapper: {
-    marginBottom: Spacing.md,
-  },
-  productImagePreview: {
+
+  // Image section
+  imagePreview: {
     width: "100%",
-    height: 180,
-    borderRadius: 16,
-    marginTop: Spacing.sm,
-    backgroundColor: "#f0f0f0",
+    height: 160,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.sm,
   },
-  imageHint: {
-    fontSize: Typography.fontSizes.xs,
-    marginBottom: Spacing.xs,
-  },
-  warningText: {
-    fontSize: Typography.fontSizes.xs,
-    marginBottom: Spacing.xs,
-  },
-  imageButton: {
-    padding: Spacing.md,
-    borderRadius: 16,
+  imagePlaceholder: {
+    width: "100%",
+    height: 120,
+    borderRadius: BorderRadius.lg,
     alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  inventoryList: {
-    paddingBottom: Spacing.md,
-  },
-  inventoryCard: {
-    borderRadius: 20,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    ...Shadows.sm,
-  },
-  inventoryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  inventoryAvatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    overflow: "hidden",
     justifyContent: "center",
-    alignItems: "center",
-    marginRight: Spacing.md,
+    marginBottom: Spacing.sm,
   },
-  inventoryImage: {
-    width: "100%",
-    height: "100%",
+  imagePlaceholderText: {
+    fontSize: Typography.fontSizes.sm,
+    marginTop: Spacing.xs,
   },
-  inventoryInfo: {
+  warnText: {
+    fontSize: Typography.fontSizes.xs,
+    color: "#D32F2F",
+    marginBottom: Spacing.sm,
+  },
+  imageButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  imageBtn: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.xs,
   },
-  inventoryName: {
+  imageBtnText: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.semibold,
+  },
+
+  // Form fields
+  fieldGroup: { marginBottom: Spacing.md },
+  fieldLabel: {
+    fontSize: Typography.fontSizes.sm,
+    marginBottom: 4,
+    fontWeight: Typography.fontWeights.medium,
+  },
+  fieldInput: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    fontSize: Typography.fontSizes.md,
+  },
+
+  // Modal footer
+  modalFooter: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+  },
+  footerBtn: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  footerBtnPrimary: {},
+  footerBtnText: {
     fontSize: Typography.fontSizes.md,
     fontWeight: Typography.fontWeights.semibold,
-    marginBottom: Spacing.xs,
   },
-  inventoryMeta: {
-    fontSize: Typography.fontSizes.xs,
-    marginBottom: Spacing.xs,
-  },
-  inventoryFieldRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: Spacing.sm,
-    flexWrap: "wrap",
-  },
-  inventoryField: {
-    flex: 1,
-    minWidth: 100,
-  },
-  inventoryFooter: {
-    marginTop: Spacing.md,
-    alignItems: "flex-end",
-  },
-  inventorySaveButton: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: 16,
-  },
-  inlineLabel: {
-    fontSize: Typography.fontSizes.xs,
-    marginBottom: Spacing.xs,
+  footerBtnTextWhite: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.md,
+    fontWeight: Typography.fontWeights.semibold,
   },
 });
