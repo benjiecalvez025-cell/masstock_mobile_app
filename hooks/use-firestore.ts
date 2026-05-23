@@ -32,7 +32,7 @@ import {
     updateProduct,
     claimUnownedProducts,
 } from "@/services/firestore-enhanced";
-import { Timestamp, doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
+import { Timestamp, doc, onSnapshot, collection, query, where, orderBy, getDocs } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "@/services/firebase.config";
 
@@ -188,6 +188,38 @@ export function useCart(userId?: string, clientKey?: string) {
   };
 }
 
+// ============ FALLBACK ORDERS QUERY ============
+
+// Fallback function for getting orders without composite index
+async function getUserOrdersNoIndex(userId: string): Promise<(OrderData & { id: string })[]> {
+  try {
+    console.log("Using fallback query (no index required)...");
+    const q = query(
+      collection(db, "orders"),
+      where("userId", "==", userId)
+    );
+    const snapshot = await getDocs(q);
+    const orders = snapshot.docs.map(
+      (doc) =>
+        ({
+          id: doc.id,
+          ...doc.data(),
+        }) as OrderData & { id: string },
+    );
+    // Sort by createdAt manually
+    orders.sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+      const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    });
+    console.log("Fallback query returned:", orders.length, "orders");
+    return orders;
+  } catch (err) {
+    console.error("Fallback query also failed:", err);
+    throw err;
+  }
+}
+
 // ============ useOrders HOOK ============
 
 export function useOrders(userId?: string) {
@@ -202,6 +234,8 @@ export function useOrders(userId?: string) {
     }
 
     setLoading(true);
+    let indexFailure = false;
+
     const q = query(
       collection(db, "orders"),
       where("userId", "==", userId),
@@ -213,12 +247,16 @@ export function useOrders(userId?: string) {
       q,
       (snapshot) => {
         try {
+          console.log("=== ORDERS QUERY SUCCESS ===");
           console.log("Orders query returned:", snapshot.docs.length, "documents");
           const userOrders = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
           })) as (OrderData & { id: string })[];
           console.log("Processed orders:", userOrders.length);
+          userOrders.forEach((order) => {
+            console.log("Order ID:", order.id, "Total:", order.total, "Date:", order.createdAt);
+          });
           setOrders(userOrders);
           setError(null);
           setLoading(false);
@@ -228,10 +266,32 @@ export function useOrders(userId?: string) {
           setLoading(false);
         }
       },
-      (err) => {
-        console.error("Error subscribing to orders - Index might be missing:", err);
-        setError("Failed to load orders");
-        setLoading(false);
+      (err: any) => {
+        console.error("=== ORDERS QUERY FAILED ===");
+        console.error("Error code:", err?.code);
+        console.error("Error message:", err?.message);
+
+        // Check if it's an index error and use fallback
+        if (err?.message?.includes("index") || err?.code === "failed-precondition") {
+          console.warn("⚠️ Index missing - using fallback query without orderBy");
+          indexFailure = true;
+
+          // Use fallback query without index
+          getUserOrdersNoIndex(userId)
+            .then((orders) => {
+              setOrders(orders);
+              setError(null);
+              setLoading(false);
+            })
+            .catch((fallbackErr) => {
+              console.error("Fallback also failed:", fallbackErr);
+              setError("Failed to load orders");
+              setLoading(false);
+            });
+        } else {
+          setError("Failed to load orders");
+          setLoading(false);
+        }
       }
     );
 
@@ -323,6 +383,31 @@ export function useOrders(userId?: string) {
     return orders.filter((order) => order.status === status);
   };
 
+  const refreshOrders = async () => {
+    if (!userId) {
+      console.log("refreshOrders: No userId");
+      return;
+    }
+    try {
+      console.log("=== REFRESHING ORDERS ===");
+      console.log("userId:", userId);
+      const updated = await getUserOrders(userId);
+      console.log("Refreshed orders count:", updated.length);
+      updated.forEach((order: any) => {
+        console.log("Refreshed order ID:", order.id, "Total:", order.total);
+      });
+      setOrders(
+        updated.map((o: any) => ({ ...(o as any), id: o.id || o.orderId })),
+      );
+      console.log("Orders state updated");
+    } catch (err: any) {
+      console.error("=== ERROR REFRESHING ORDERS ===");
+      console.error("Error code:", err?.code);
+      console.error("Error message:", err?.message);
+      console.error("Full error:", err);
+    }
+  };
+
   return {
     orders,
     loading,
@@ -331,6 +416,7 @@ export function useOrders(userId?: string) {
     updateOrderStatus: handleUpdateOrderStatus,
     getOrderById,
     getOrdersByStatus,
+    refreshOrders,
   };
 }
 

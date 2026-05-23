@@ -318,7 +318,30 @@ export async function getUserOrders(userId: string): Promise<OrderData[]> {
           ...doc.data(),
         }) as OrderData & { id: string },
     );
-  } catch (error) {
+  } catch (error: any) {
+    // Check if it's an index error and use fallback
+    if (error?.message?.includes("index") || error?.code === "failed-precondition") {
+      console.warn("⚠️ Composite index missing in getUserOrders - using fallback");
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", userId),
+      );
+      const snapshot = await getDocs(q);
+      const orders = snapshot.docs.map(
+        (doc) =>
+          ({
+            id: doc.id,
+            ...doc.data(),
+          }) as OrderData & { id: string },
+      );
+      // Sort by createdAt manually
+      orders.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      });
+      return orders;
+    }
     console.error("Error fetching orders:", error);
     throw error;
   }

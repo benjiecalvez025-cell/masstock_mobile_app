@@ -49,7 +49,7 @@ export default function CartScreen() {
     removeItem,
     clearCart,
   } = useCart(user?.id, selectedClientKey || undefined);
-  const { createOrder, loading: orderLoading } = useOrders(user?.id);
+  const { createOrder, loading: orderLoading, refreshOrders } = useOrders(user?.id);
 
   const cartTotal = useMemo(
     () =>
@@ -197,6 +197,11 @@ export default function CartScreen() {
         await clearCart(selectedClientKey);
         console.log("Cart cleared for clientKey:", selectedClientKey);
       }
+
+      console.log("=== REFRESHING ORDERS ===");
+      // Refresh orders to ensure new order appears
+      await refreshOrders();
+      console.log("Orders refreshed");
 
       console.log("=== ORDER SUCCESS ===");
       setSuccessData({
@@ -445,24 +450,6 @@ export default function CartScreen() {
           </Text>
         </View>
 
-        {cartItems.length > 0 && cartTotal < 450 && (
-          <View
-            style={[styles.upsellBanner, { backgroundColor: colors.accent }]}
-          >
-            <Text style={styles.upsellText}>
-              Add ₱{(450 - cartTotal).toLocaleString()} more for FREE Delivery!
-            </Text>
-            <View
-              style={[
-                styles.progressBar,
-                {
-                  width: `${(cartTotal / 450) * 100}%`,
-                  backgroundColor: colors.primary,
-                },
-              ]}
-            />
-          </View>
-        )}
 
         {cartItems.length === 0 ? (
           <View style={styles.emptyCart}>
