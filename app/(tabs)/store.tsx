@@ -78,6 +78,9 @@ export default function StoreScreen() {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [sortBy, setSortBy] = useState<
+    "popular" | "price-low" | "price-high" | "rating" | "low-stock" | "no-stock"
+  >("popular");
   const [modalVisible, setModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM);
@@ -100,7 +103,7 @@ export default function StoreScreen() {
 
   const filteredProducts = useMemo(() => {
     const q = search.toLowerCase();
-    return products.filter((p) => {
+    let filtered = products.filter((p) => {
       const matchesSearch =
         !q ||
         (p.name ?? "").toLowerCase().includes(q) ||
@@ -110,7 +113,37 @@ export default function StoreScreen() {
         selectedCategory === "All" || p.category === selectedCategory;
       return matchesSearch && matchesCat;
     });
-  }, [products, search, selectedCategory]);
+
+    // Apply sorting
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case "price-low":
+        sorted.sort((a, b) => (a.wholesalePrice ?? 0) - (b.wholesalePrice ?? 0));
+        break;
+      case "price-high":
+        sorted.sort((a, b) => (b.wholesalePrice ?? 0) - (a.wholesalePrice ?? 0));
+        break;
+      case "rating":
+        sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+        break;
+      case "low-stock":
+        sorted.sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0));
+        break;
+      case "no-stock":
+        sorted.sort((a, b) => {
+          const aIsOut = (a.stock ?? 0) === 0 ? 1 : 0;
+          const bIsOut = (b.stock ?? 0) === 0 ? 1 : 0;
+          return bIsOut - aIsOut; // Out of stock first
+        });
+        break;
+      case "popular":
+      default:
+        // Keep original order for popular
+        break;
+    }
+
+    return sorted;
+  }, [products, search, selectedCategory, sortBy]);
 
   const stats = useMemo(
     () => ({
@@ -473,14 +506,55 @@ export default function StoreScreen() {
           ))}
         </ScrollView>
 
-        {/* Results count */}
-        <View style={styles.resultsRow}>
+        {/* Results count and sort button */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+          }}
+        >
           <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
             {filteredProducts.length} product
             {filteredProducts.length !== 1 ? "s" : ""}
             {search ? ` for "${search}"` : ""}
             {selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}
           </Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              const sortOptions: Array<
+                "popular" | "price-low" | "price-high" | "rating" | "low-stock" | "no-stock"
+              > = [
+                "popular",
+                "price-low",
+                "price-high",
+                "rating",
+                "low-stock",
+                "no-stock",
+              ];
+              const currentIndex = sortOptions.indexOf(sortBy);
+              const nextIndex = (currentIndex + 1) % sortOptions.length;
+              setSortBy(sortOptions[nextIndex]);
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border ?? "#e0e0e0",
+            }}
+          >
+            <MaterialIcons name="sort" size={16} color={colors.text} />
+            <Text style={[{ color: colors.text, marginLeft: 4, fontSize: 12 }]}>
+              Sort: {sortBy.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {error ? (
@@ -495,6 +569,7 @@ export default function StoreScreen() {
       colorScheme,
       search,
       selectedCategory,
+      sortBy,
       categories.length,
       filteredProducts.length,
       error,
