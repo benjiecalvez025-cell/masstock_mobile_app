@@ -1,4 +1,18 @@
-import React, { useMemo, useState } from "react";
+import {
+  BorderRadius,
+  Colors,
+  Shadows,
+  Spacing,
+  Typography,
+} from "@/constants/theme";
+import { useAppContext } from "@/context/app-context";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useStore } from "@/hooks/use-firestore";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { Timestamp } from "firebase/firestore";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,14 +27,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Colors, Shadows, Spacing, Typography, BorderRadius } from "@/constants/theme";
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAppContext } from "@/context/app-context";
-import { useStore } from "@/hooks/use-firestore";
-import { useRouter } from "expo-router";
-import { Timestamp } from "firebase/firestore";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -78,9 +84,17 @@ export default function StoreScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageSizeWarning, setImageSizeWarning] = useState<string | null>(null);
 
+  // ── Refs ────────────────────────────────────────────────────────────────
+  // Store category scrollview offset to restore after header remounts
+  const categoryScrollRef = React.useRef<ScrollView>(null);
+  const categoryScrollOffsetRef = React.useRef(0);
+
   // ── Derived data ──────────────────────────────────────────────────────────
   const categories = useMemo(
-    () => ["All", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))],
+    () => [
+      "All",
+      ...Array.from(new Set(products.map((p) => p.category).filter(Boolean))),
+    ],
     [products],
   );
 
@@ -92,7 +106,8 @@ export default function StoreScreen() {
         (p.name ?? "").toLowerCase().includes(q) ||
         (p.brand ?? "").toLowerCase().includes(q) ||
         (p.category ?? "").toLowerCase().includes(q);
-      const matchesCat = selectedCategory === "All" || p.category === selectedCategory;
+      const matchesCat =
+        selectedCategory === "All" || p.category === selectedCategory;
       return matchesSearch && matchesCat;
     });
   }, [products, search, selectedCategory]);
@@ -149,7 +164,10 @@ export default function StoreScreen() {
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "Please grant access to your photo library.");
+      Alert.alert(
+        "Permission required",
+        "Please grant access to your photo library.",
+      );
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -161,7 +179,9 @@ export default function StoreScreen() {
       const asset = result.assets[0];
       const sizeMb = (asset.fileSize ?? 0) / (1024 * 1024);
       if (sizeMb > 5) {
-        setImageSizeWarning(`Image is too large (${sizeMb.toFixed(1)} MB). Use an image under 5 MB.`);
+        setImageSizeWarning(
+          `Image is too large (${sizeMb.toFixed(1)} MB). Use an image under 5 MB.`,
+        );
         return;
       }
       setImageSizeWarning(null);
@@ -196,8 +216,16 @@ export default function StoreScreen() {
       Alert.alert("Validation", "Product name and category are required.");
       return;
     }
-    if (isNaN(retailPrice) || isNaN(wholesalePrice) || isNaN(stock) || isNaN(minOrder)) {
-      Alert.alert("Validation", "Please enter valid numbers for price, stock, and minimum order.");
+    if (
+      isNaN(retailPrice) ||
+      isNaN(wholesalePrice) ||
+      isNaN(stock) ||
+      isNaN(minOrder)
+    ) {
+      Alert.alert(
+        "Validation",
+        "Please enter valid numbers for price, stock, and minimum order.",
+      );
       return;
     }
 
@@ -235,7 +263,9 @@ export default function StoreScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <MaterialIcons name="store" size={64} color={colors.textSecondary} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to manage your store</Text>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          Sign in to manage your store
+        </Text>
         <TouchableOpacity
           style={[styles.ctaButton, { backgroundColor: colors.primary }]}
           onPress={() => router.push("/auth/login")}
@@ -250,18 +280,30 @@ export default function StoreScreen() {
   const renderProduct = ({ item }: { item: any }) => {
     const inStock = (item.stock ?? 0) > 0;
     return (
-      <View style={[styles.productCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
+      <View
+        style={[
+          styles.productCard,
+          { backgroundColor: colors.surface, ...Shadows.sm },
+        ]}
+      >
         <Image
           source={{ uri: item.image || placeholder(item.name) }}
           style={styles.productImage}
           resizeMode="cover"
         />
         <View style={styles.productInfo}>
-          <Text style={[styles.productName, { color: colors.text }]} numberOfLines={1}>
+          <Text
+            style={[styles.productName, { color: colors.text }]}
+            numberOfLines={1}
+          >
             {item.name}
           </Text>
-          <Text style={[styles.productCategory, { color: colors.primary }]} numberOfLines={1}>
-            {item.category}{item.brand ? ` · ${item.brand}` : ""}
+          <Text
+            style={[styles.productCategory, { color: colors.primary }]}
+            numberOfLines={1}
+          >
+            {item.category}
+            {item.brand ? ` · ${item.brand}` : ""}
           </Text>
           <View style={styles.priceRow}>
             <Text style={[styles.priceWholesale, { color: colors.text }]}>
@@ -294,7 +336,10 @@ export default function StoreScreen() {
         </View>
         <View style={styles.productActions}>
           <TouchableOpacity
-            style={[styles.actionIcon, { backgroundColor: colors.accentBg ?? "#EEF2FF" }]}
+            style={[
+              styles.actionIcon,
+              { backgroundColor: colors.accentBg ?? "#EEF2FF" },
+            ]}
             onPress={() => openEdit(item)}
           >
             <MaterialIcons name="edit" size={18} color={colors.primary} />
@@ -310,33 +355,178 @@ export default function StoreScreen() {
     );
   };
 
-  // Only results count + error go in ListHeaderComponent — no interactive elements
-  // so re-mounts are harmless and don't dismiss the keyboard.
-  const renderListHeader = () => (
-    <>
-      <View style={styles.resultsRow}>
-        <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
-          {filteredProducts.length} product{filteredProducts.length !== 1 ? "s" : ""}
-          {search ? ` for "${search}"` : ""}
-          {selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}
-        </Text>
-      </View>
-      {error ? (
-        <View style={[styles.errorBanner, { backgroundColor: "#FFEBEE" }]}>
-          <MaterialIcons name="error-outline" size={16} color="#D32F2F" />
-          <Text style={styles.errorText}>{error}</Text>
+  // Memoized header to prevent remounts when search/category changes.
+  // This keeps the header stable (same function reference) so the FlatList doesn't
+  // unmount/remount it, which preserves keyboard focus and category scroll position.
+  const renderListHeader = useCallback(
+    () => (
+      <>
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <View
+            style={[
+              styles.statCard,
+              { backgroundColor: colors.surface, ...Shadows.sm },
+            ]}
+          >
+            <Text style={[styles.statValue, { color: colors.primary }]}>
+              {stats.total}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Products
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.statCard,
+              { backgroundColor: colors.surface, ...Shadows.sm },
+            ]}
+          >
+            <Text style={[styles.statValue, { color: "#388E3C" }]}>
+              {stats.inStock}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              In Stock
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.statCard,
+              { backgroundColor: colors.surface, ...Shadows.sm },
+            ]}
+          >
+            <Text style={[styles.statValue, { color: "#D32F2F" }]}>
+              {stats.outOfStock}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Out of Stock
+            </Text>
+          </View>
         </View>
-      ) : null}
-    </>
+
+        {/* Search */}
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border ?? "#e0e0e0",
+            },
+          ]}
+        >
+          <MaterialIcons name="search" size={20} color={colors.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search products..."
+            placeholderTextColor={colors.textSecondary}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Category chips */}
+        <ScrollView
+          ref={categoryScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            categoryScrollOffsetRef.current = e.nativeEvent.contentOffset.x;
+          }}
+        >
+          {categories.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor:
+                    selectedCategory === cat ? colors.primary : colors.surface,
+                  borderColor:
+                    selectedCategory === cat
+                      ? colors.primary
+                      : (colors.border ?? "#e0e0e0"),
+                },
+              ]}
+              onPress={() => setSelectedCategory(cat)}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  { color: selectedCategory === cat ? "#fff" : colors.text },
+                ]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Results count */}
+        <View style={styles.resultsRow}>
+          <Text style={[styles.resultsText, { color: colors.textSecondary }]}>
+            {filteredProducts.length} product
+            {filteredProducts.length !== 1 ? "s" : ""}
+            {search ? ` for "${search}"` : ""}
+            {selectedCategory !== "All" ? ` in ${selectedCategory}` : ""}
+          </Text>
+        </View>
+
+        {error ? (
+          <View style={[styles.errorBanner, { backgroundColor: "#FFEBEE" }]}>
+            <MaterialIcons name="error-outline" size={16} color="#D32F2F" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+      </>
+    ),
+    [
+      colorScheme,
+      search,
+      selectedCategory,
+      categories.length,
+      filteredProducts.length,
+      error,
+      stats.total,
+      stats.inStock,
+      stats.outOfStock,
+    ],
   );
+
+  // Restore category scroll position after header updates
+  React.useEffect(() => {
+    if (categoryScrollRef.current && categoryScrollOffsetRef.current > 0) {
+      categoryScrollRef.current.scrollTo({
+        x: categoryScrollOffsetRef.current,
+        animated: false,
+      });
+    }
+  }, [selectedCategory]);
 
   const renderEmpty = () => {
     if (loading) return null;
     return (
       <View style={styles.emptyState}>
-        <MaterialIcons name="inventory-2" size={56} color={colors.textSecondary} />
+        <MaterialIcons
+          name="inventory-2"
+          size={56}
+          color={colors.textSecondary}
+        />
         <Text style={[styles.emptyTitle, { color: colors.text }]}>
-          {search || selectedCategory !== "All" ? "No products match" : "No products yet"}
+          {search || selectedCategory !== "All"
+            ? "No products match"
+            : "No products yet"}
         </Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
           {search || selectedCategory !== "All"
@@ -358,73 +548,11 @@ export default function StoreScreen() {
         </View>
         <TouchableOpacity style={styles.addButton} onPress={openAdd}>
           <MaterialIcons name="add" size={20} color={colors.primary} />
-          <Text style={[styles.addButtonText, { color: colors.primary }]}>Add Product</Text>
+          <Text style={[styles.addButtonText, { color: colors.primary }]}>
+            Add Product
+          </Text>
         </TouchableOpacity>
       </View>
-
-      {/* Stats — stable, outside FlatList */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
-          <Text style={[styles.statValue, { color: colors.primary }]}>{stats.total}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Products</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
-          <Text style={[styles.statValue, { color: "#388E3C" }]}>{stats.inStock}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>In Stock</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: colors.surface, ...Shadows.sm }]}>
-          <Text style={[styles.statValue, { color: "#D32F2F" }]}>{stats.outOfStock}</Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Out of Stock</Text>
-        </View>
-      </View>
-
-      {/* Search — stable, outside FlatList so keyboard never dismisses on re-render */}
-      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border ?? "#e0e0e0" }]}>
-        <MaterialIcons name="search" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search products..."
-          placeholderTextColor={colors.textSecondary}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Category chips — stable ScrollView, scroll position never resets */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
-        keyboardShouldPersistTaps="handled"
-      >
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: selectedCategory === cat ? colors.primary : colors.surface,
-                borderColor: selectedCategory === cat ? colors.primary : (colors.border ?? "#e0e0e0"),
-              },
-            ]}
-            onPress={() => setSelectedCategory(cat)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                { color: selectedCategory === cat ? "#fff" : colors.text },
-              ]}
-            >
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       {loading && products.length === 0 ? (
         <View style={styles.centered}>
@@ -452,7 +580,9 @@ export default function StoreScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
+          <View
+            style={[styles.modalSheet, { backgroundColor: colors.surface }]}
+          >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 {editingProduct ? "Edit Product" : "Add New Product"}
@@ -462,7 +592,10 @@ export default function StoreScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.modalScroll}
+            >
               {/* Image preview */}
               {form.image ? (
                 <Image
@@ -471,9 +604,23 @@ export default function StoreScreen() {
                   resizeMode="cover"
                 />
               ) : (
-                <View style={[styles.imagePlaceholder, { backgroundColor: colors.background }]}>
-                  <MaterialIcons name="image" size={40} color={colors.textSecondary} />
-                  <Text style={[styles.imagePlaceholderText, { color: colors.textSecondary }]}>
+                <View
+                  style={[
+                    styles.imagePlaceholder,
+                    { backgroundColor: colors.background },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="image"
+                    size={40}
+                    color={colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.imagePlaceholderText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
                     No image selected
                   </Text>
                 </View>
@@ -492,7 +639,10 @@ export default function StoreScreen() {
                   <Text style={styles.imageBtnText}>Gallery</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.imageBtn, { backgroundColor: colors.accent ?? colors.primary }]}
+                  style={[
+                    styles.imageBtn,
+                    { backgroundColor: colors.accent ?? colors.primary },
+                  ]}
                   onPress={handleTakePhoto}
                 >
                   <MaterialIcons name="camera-alt" size={16} color="#fff" />
@@ -503,29 +653,77 @@ export default function StoreScreen() {
               {/* Form fields */}
               {(
                 [
-                  { label: "Product Name *", field: "name", keyboard: "default" },
-                  { label: "Category *", field: "category", keyboard: "default" },
+                  {
+                    label: "Product Name *",
+                    field: "name",
+                    keyboard: "default",
+                  },
+                  {
+                    label: "Category *",
+                    field: "category",
+                    keyboard: "default",
+                  },
                   { label: "Brand", field: "brand", keyboard: "default" },
-                  { label: "Description", field: "description", keyboard: "default", multiline: true },
-                  { label: "Retail Price (₱) *", field: "retailPrice", keyboard: "decimal-pad" },
-                  { label: "Wholesale Price (₱) *", field: "wholesalePrice", keyboard: "decimal-pad" },
-                  { label: "Stock Quantity *", field: "stock", keyboard: "number-pad" },
-                  { label: "Minimum Order *", field: "minOrder", keyboard: "number-pad" },
-                  { label: "Image URL (optional)", field: "image", keyboard: "default" },
-                ] as Array<{ label: string; field: keyof ProductForm; keyboard: string; multiline?: boolean }>
+                  {
+                    label: "Description",
+                    field: "description",
+                    keyboard: "default",
+                    multiline: true,
+                  },
+                  {
+                    label: "Retail Price (₱) *",
+                    field: "retailPrice",
+                    keyboard: "decimal-pad",
+                  },
+                  {
+                    label: "Wholesale Price (₱) *",
+                    field: "wholesalePrice",
+                    keyboard: "decimal-pad",
+                  },
+                  {
+                    label: "Stock Quantity *",
+                    field: "stock",
+                    keyboard: "number-pad",
+                  },
+                  {
+                    label: "Minimum Order *",
+                    field: "minOrder",
+                    keyboard: "number-pad",
+                  },
+                  {
+                    label: "Image URL (optional)",
+                    field: "image",
+                    keyboard: "default",
+                  },
+                ] as Array<{
+                  label: string;
+                  field: keyof ProductForm;
+                  keyboard: string;
+                  multiline?: boolean;
+                }>
               ).map(({ label, field, keyboard, multiline }) => (
                 <View key={field} style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+                  <Text
+                    style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                  >
+                    {label}
+                  </Text>
                   <TextInput
                     style={[
                       styles.fieldInput,
-                      { backgroundColor: colors.background, color: colors.text, borderColor: colors.border ?? "#e0e0e0" },
+                      {
+                        backgroundColor: colors.background,
+                        color: colors.text,
+                        borderColor: colors.border ?? "#e0e0e0",
+                      },
                       multiline && { height: 72, textAlignVertical: "top" },
                     ]}
                     value={form[field]}
                     keyboardType={keyboard as any}
                     multiline={multiline}
-                    onChangeText={(v) => setForm((prev) => ({ ...prev, [field]: v }))}
+                    onChangeText={(v) =>
+                      setForm((prev) => ({ ...prev, [field]: v }))
+                    }
                     placeholder={label.replace(" *", "")}
                     placeholderTextColor={colors.textSecondary}
                   />
@@ -537,16 +735,24 @@ export default function StoreScreen() {
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.footerBtn, { backgroundColor: colors.background }]}
+                style={[
+                  styles.footerBtn,
+                  { backgroundColor: colors.background },
+                ]}
                 onPress={() => setModalVisible(false)}
               >
-                <Text style={[styles.footerBtnText, { color: colors.text }]}>Cancel</Text>
+                <Text style={[styles.footerBtnText, { color: colors.text }]}>
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.footerBtn,
                   styles.footerBtnPrimary,
-                  { backgroundColor: colors.primary, opacity: isSubmitting ? 0.6 : 1 },
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: isSubmitting ? 0.6 : 1,
+                  },
                 ]}
                 onPress={handleSubmit}
                 disabled={isSubmitting}
