@@ -17,6 +17,7 @@ interface ProductDetailModalProps {
   onClose: () => void;
   product: any;
   onAddToCart?: (productId: string, quantity: number) => void;
+  priceType?: "retail" | "wholesale";
 }
 
 export function ProductDetailModal({
@@ -24,10 +25,14 @@ export function ProductDetailModal({
   onClose,
   product,
   onAddToCart,
+  priceType = "wholesale",
 }: ProductDetailModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const [quantity, setQuantity] = useState(1);
+
+  const displayPrice = priceType === "retail" ? product?.retailPrice : product?.wholesalePrice;
+  const originalPrice = priceType === "retail" ? product?.wholesalePrice : product?.retailPrice;
 
   if (!product) return null;
 
@@ -79,11 +84,11 @@ export function ProductDetailModal({
 
               <View style={styles.priceContainer}>
                 <Text style={[styles.price, { color: colors.primary }]}>
-                  ₱{product.wholesalePrice.toLocaleString()}
+                  ₱{(displayPrice || 0).toLocaleString()}
                 </Text>
-                {product.retailPrice && (
-                  <Text style={[styles.originalPrice, { color: colors.text }]}> 
-                    ₱{product.retailPrice.toLocaleString()}
+                {originalPrice && (
+                  <Text style={[styles.originalPrice, { color: colors.text }]}>
+                    ₱{originalPrice.toLocaleString()}
                   </Text>
                 )}
               </View>
@@ -187,10 +192,12 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: '100%',
-    height: 200,
+    height: 150,
+    backgroundColor: '#f0f0f0',
   },
   productInfo: {
     padding: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   productName: {
     fontSize: Typography.sizes.xl,
@@ -200,7 +207,11 @@ const styles = StyleSheet.create({
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    borderRadius: BorderRadius.md,
   },
   price: {
     fontSize: Typography.sizes.xxl,

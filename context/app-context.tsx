@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "@/services/firebase.config";
+import { ClientInfo, PaymentMode } from "@/types/client";
 
 let AsyncStorage: any = null;
 try {
@@ -53,6 +54,12 @@ export interface AppContextType {
     shippingAddress: string,
   ) => Promise<void>;
   processPayment: (orderId: string, method: string) => Promise<void>;
+
+  // Agent order flow: client info and payment mode
+  clientInfo: ClientInfo | null;
+  paymentMode: PaymentMode | null;
+  setClientInfo: (info: ClientInfo | null) => void;
+  setPaymentMode: (mode: PaymentMode | null) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,6 +67,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: PropsWithChildren) {
   const [user, setUserState] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
 
   const setUser = (newUser: User) => {
     setUserState(newUser);
@@ -133,6 +142,11 @@ export function AppProvider({ children }: PropsWithChildren) {
     getCartTotal: () => 0,
     createOrder: async () => {},
     processPayment: async () => {},
+
+    clientInfo,
+    paymentMode,
+    setClientInfo,
+    setPaymentMode,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

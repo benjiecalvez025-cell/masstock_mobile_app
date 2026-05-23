@@ -113,27 +113,11 @@ export function OrderConfirmationModal({
             {/* Order Summary */}
             <View style={styles.summary}>
               <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.text }]}>
-                  Subtotal
-                </Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>
-                  ₱{total}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { color: colors.text }]}>
-                  Delivery Fee
-                </Text>
-                <Text style={[styles.summaryValue, { color: colors.text }]}>
-                  ₱{deliveryFee}
-                </Text>
-              </View>
-              <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={[styles.totalLabel, { color: colors.primary }]}>
                   Total
                 </Text>
                 <Text style={[styles.totalValue, { color: colors.primary }]}>
-                  ₱{total + deliveryFee}
+                  ₱{parseFloat(total.toFixed(2)).toLocaleString()}
                 </Text>
               </View>
             </View>

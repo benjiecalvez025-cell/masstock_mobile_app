@@ -12,8 +12,12 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const { user } = useAppContext();
-  const { getItemCount } = useCart(user?.id);
-  const cartBadge = getItemCount();
+  const { allClientCarts } = useCart(user?.id);
+
+  // Calculate total items from all clients
+  const cartBadge = Object.values(allClientCarts).reduce((total, cart: any) => {
+    return total + (cart.items || []).reduce((count: number, item: any) => count + item.quantity, 0);
+  }, 0);
 
   return (
     <Tabs

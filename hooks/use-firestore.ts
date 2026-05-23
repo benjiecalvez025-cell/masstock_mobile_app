@@ -9,6 +9,7 @@ import {
     createStore,
     getAllProducts,
     getCart,
+    getAllClientCarts,
     getCategories,
     getFeaturedProducts,
     getInStockProducts,
@@ -31,13 +32,15 @@ import {
     updateProduct,
     claimUnownedProducts,
 } from "@/services/firestore-enhanced";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { db } from "@/services/firebase.config";
 
 // ============ useCart HOOK ============
 
-export function useCart(userId?: string) {
+export function useCart(userId?: string, clientKey?: string) {
   const [cartItems, setCartItems] = useState<CartItemData[]>([]);
+  const [allClientCarts, setAllClientCarts] = useState<{ [key: string]: any }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,28 +50,53 @@ export function useCart(userId?: string) {
       return;
     }
 
-    const loadCart = async () => {
-      try {
-        setLoading(true);
-        const items = await getCart(userId);
-        setCartItems(items);
-        setError(null);
-      } catch (err) {
-        console.error("Error loading cart:", err);
+    setLoading(true);
+    const cartRef = doc(db, "carts", userId);
+
+    // Subscribe to real-time updates
+    const unsubscribe = onSnapshot(
+      cartRef,
+      (snapshot) => {
+        try {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            setAllClientCarts(data);
+
+            // If clientKey is provided, load that specific client's cart
+            if (clientKey && data[clientKey]) {
+              setCartItems(data[clientKey].items || []);
+            } else if (!clientKey) {
+              // Fallback for backwards compatibility
+              setCartItems(data.items || []);
+            }
+          } else {
+            setAllClientCarts({});
+            setCartItems([]);
+          }
+          setError(null);
+          setLoading(false);
+        } catch (err) {
+          console.error("Error processing cart snapshot:", err);
+          setError("Failed to load cart");
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error subscribing to cart:", err);
         setError("Failed to load cart");
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    loadCart();
-  }, [userId]);
+    return () => unsubscribe();
+  }, [userId, clientKey]);
 
-  const handleAddToCart = async (item: CartItemData) => {
+  const handleAddToCart = async (item: CartItemData, key?: string, clientInfo?: any, paymentMode?: string) => {
     try {
       if (!userId) throw new Error("User not authenticated");
-      await addToCart(userId, item);
-      const updated = await getCart(userId);
+      const finalKey = key || clientKey || "default";
+      await addToCart(userId, item, finalKey, clientInfo, paymentMode);
+      const updated = await getCart(userId, finalKey);
       setCartItems(updated);
       setError(null);
     } catch (err) {
@@ -77,12 +105,12 @@ export function useCart(userId?: string) {
     }
   };
 
-  const handleUpdateItem = async (productId: string, quantity: number) => {
+  const handleUpdateItem = async (productId: string, quantity: number, key?: string) => {
     try {
       if (!userId) throw new Error("User not authenticated");
-      await updateCartItem(userId, productId, quantity);
-      const updated = await getCart(userId);
-      setCartItems(updated);
+      const finalKey = key || clientKey || "default";
+      await updateCartItem(userId, productId, quantity, finalKey);
+      // Let the real-time listener update the cart items
       setError(null);
     } catch (err) {
       console.error("Error updating cart item:", err);
@@ -90,24 +118,44 @@ export function useCart(userId?: string) {
     }
   };
 
-  const handleRemoveItem = async (productId: string) => {
+  const handleRemoveItem = async (productId: string, key?: string) => {
     try {
+      console.log("=== handleRemoveItem called ===");
+      console.log("productId:", productId);
+      console.log("key:", key);
+      console.log("userId:", userId);
+      console.log("clientKey:", clientKey);
+
       if (!userId) throw new Error("User not authenticated");
-      await removeFromCart(userId, productId);
-      const updated = await getCart(userId);
-      setCartItems(updated);
+      const finalKey = key || clientKey || "default";
+      console.log("finalKey:", finalKey);
+      console.log("cartItems before remove:", cartItems);
+
+      await removeFromCart(userId, productId, finalKey);
+      console.log("removeFromCart completed");
+
+      // Manually update cart items by filtering out the removed product
+      setCartItems(prevItems => {
+        const filtered = prevItems.filter(item => item.productId !== productId);
+        console.log("State update - filtered cartItems:", filtered);
+        return filtered;
+      });
+
       setError(null);
+      console.log("=== handleRemoveItem SUCCESS ===");
     } catch (err) {
+      console.error("=== handleRemoveItem FAILED ===");
       console.error("Error removing from cart:", err);
       setError("Failed to remove item");
     }
   };
 
-  const handleClearCart = async () => {
+  const handleClearCart = async (key?: string) => {
     try {
       if (!userId) throw new Error("User not authenticated");
-      await clearCart(userId);
-      setCartItems([]);
+      const finalKey = key || clientKey || "default";
+      await clearCart(userId, finalKey);
+      // Let the real-time listener update the cart items
       setError(null);
     } catch (err) {
       console.error("Error clearing cart:", err);
@@ -128,6 +176,7 @@ export function useCart(userId?: string) {
 
   return {
     cartItems,
+    allClientCarts,
     loading,
     error,
     addToCart: handleAddToCart,
@@ -152,28 +201,41 @@ export function useOrders(userId?: string) {
       return;
     }
 
-    const loadOrders = async () => {
-      try {
-        setLoading(true);
-        const userOrders = await getUserOrders(userId);
-        // Ensure each order has an `id` field for UI/state typing
-        setOrders(
-          userOrders.map((o) => ({
-            ...(o as any),
-            id: (o as any).id || (o as any).orderId,
-          })),
-        );
+    setLoading(true);
+    const q = query(
+      collection(db, "orders"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
+    );
 
-        setError(null);
-      } catch (err) {
-        console.error("Error loading orders:", err);
+    // Subscribe to real-time updates
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        try {
+          console.log("Orders query returned:", snapshot.docs.length, "documents");
+          const userOrders = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as (OrderData & { id: string })[];
+          console.log("Processed orders:", userOrders.length);
+          setOrders(userOrders);
+          setError(null);
+          setLoading(false);
+        } catch (err) {
+          console.error("Error processing orders snapshot:", err);
+          setError("Failed to load orders");
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error subscribing to orders - Index might be missing:", err);
         setError("Failed to load orders");
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    loadOrders();
+    return () => unsubscribe();
   }, [userId]);
 
   const handleCreateOrder = async (
@@ -181,6 +243,8 @@ export function useOrders(userId?: string) {
     total: number,
     paymentMethod: string,
     shippingAddress: string,
+    clientInfo?: any,
+    paymentMode?: string,
   ): Promise<string | null> => {
     try {
       if (!userId) throw new Error("User not authenticated");
@@ -193,20 +257,40 @@ export function useOrders(userId?: string) {
         paymentStatus: "pending",
         paymentMethod,
         shippingAddress,
-        createdAt: new Date() as any,
-        updatedAt: new Date() as any,
+        clientInfo: clientInfo ? {
+          completeName: clientInfo.completeName,
+          storeName: clientInfo.storeName,
+          address: clientInfo.address,
+          contactNo: clientInfo.contactNo,
+          pinLocation: clientInfo.pinLocation,
+          storeImage: clientInfo.storeImage,
+        } : undefined,
+        paymentMode: paymentMode as any,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
       };
 
+      console.log("=== Calling createOrder from firestore-enhanced ===");
       const orderId = await createOrder(order);
-      const updated = await getUserOrders(userId);
-      setOrders(
-        updated.map((o: any) => ({ ...(o as any), id: o.id || o.orderId })),
-      );
+      console.log("orderId returned:", orderId);
+
+      if (!orderId) {
+        throw new Error("createOrder returned null/undefined orderId");
+      }
+
+      console.log("=== Order created successfully ===");
+      // Don't fetch orders here - let the real-time listener handle it
+      // This avoids needing a Firestore composite index
 
       setError(null);
+      console.log("=== Order creation completed successfully ===");
       return orderId;
-    } catch (err) {
-      console.error("Error creating order:", err);
+    } catch (err: any) {
+      console.error("=== Error in handleCreateOrder (useOrders) ===");
+      console.error("Error type:", err?.name);
+      console.error("Error message:", err?.message);
+      console.error("Full error:", err);
+      console.error("Error stack:", err?.stack);
       setError("Failed to create order");
       return null;
     }

@@ -1,9 +1,12 @@
 import { ProductCard } from "@/components/product-card";
 import { ProductDetailModal } from "@/components/modals/product-detail-modal";
+import ClientInfoModal from "@/components/ClientInfoModal";
+import PaymentModeModal from "@/components/PaymentModeModal";
 import { BorderRadius, Colors, Spacing, Typography } from "@/constants/theme";
 import { useAppContext } from "@/context/app-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Product, useCategories, useCart, useProducts } from "@/hooks/use-firestore";
+import { ClientInfo, PaymentMode } from "@/types/client";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -38,7 +41,7 @@ export default function BrowseScreen() {
     "popular" | "price-low" | "price-high" | "rating"
   >("popular");
 
-  const { user } = useAppContext();
+  const { user, setClientInfo: setContextClientInfo, setPaymentMode: setContextPaymentMode } = useAppContext();
   const { products, loading: productsLoading } = useProducts();
   const { categories } = useCategories();
   const { addToCart } = useCart(user?.id);
@@ -48,6 +51,17 @@ export default function BrowseScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const toastAnimation = useRef(new Animated.Value(80)).current;
+
+  // ── Agent Order State ──────────────────────────────────────────────────────
+  const [clientInfoVisible, setClientInfoVisible] = useState(true); // Show on first load
+  const [paymentModeVisible, setPaymentModeVisible] = useState(false);
+  const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode | null>(null);
+  const [priceType, setPriceType] = useState<"retail" | "wholesale">("wholesale");
+
+  const getClientKey = (info: ClientInfo) => {
+    return `${info.storeName}_${info.contactNo}`.replace(/\s+/g, "_");
+  };
 
   const handleOpenDetails = (product: Product) => {
     setSelectedProduct(product);
@@ -68,11 +82,10 @@ export default function BrowseScreen() {
     }
 
     const item = {
-      productId: selectedProduct.id,
-      id: selectedProduct.id,
+      productId: `${selectedProduct.id}_${priceType === "retail" ? "retail" : "wholesale"}`,
       name: selectedProduct.name,
       category: selectedProduct.category,
-      price: selectedProduct.wholesalePrice,
+      price: priceType === "retail" ? selectedProduct.retailPrice : selectedProduct.wholesalePrice,
       quantity,
       image: selectedProduct.image,
       minOrder: selectedProduct.minOrder,
@@ -80,7 +93,8 @@ export default function BrowseScreen() {
     };
 
     try {
-      await addToCart(item);
+      const clientKey = clientInfo ? getClientKey(clientInfo) : undefined;
+      await addToCart(item, clientKey, clientInfo, paymentMode ?? undefined);
       setToastType("success");
       setToastMessage(`${selectedProduct.name} has been added to your cart.`);
       setDetailVisible(false);
@@ -91,6 +105,29 @@ export default function BrowseScreen() {
     }
   };
 
+  // ── Agent Order Handlers ──────────────────────────────────────────────────
+  const handleClientInfoSubmit = (info: ClientInfo) => {
+    setClientInfo(info);
+    setContextClientInfo(info);
+    setClientInfoVisible(false);
+    setPaymentModeVisible(true);
+  };
+
+  const handlePaymentModeSelect = (mode: PaymentMode) => {
+    setPaymentMode(mode);
+    setContextPaymentMode(mode);
+    setPaymentModeVisible(false);
+  };
+
+  const handleNewOrder = () => {
+    // Reset for next order
+    setClientInfo(null);
+    setPaymentMode(null);
+    setContextClientInfo(null);
+    setContextPaymentMode(null);
+    setClientInfoVisible(true);
+  };
+
   const handleQuickAddToCart = async (product: Product) => {
     if (!user) {
       setToastType("error");
@@ -98,20 +135,26 @@ export default function BrowseScreen() {
       return;
     }
 
+    if (!clientInfo || !paymentMode) {
+      setToastType("error");
+      setToastMessage("Please select client and payment mode first.");
+      return;
+    }
+
     const item = {
-      productId: product.id,
-      id: product.id,
+      productId: `${product.id}_${priceType === "retail" ? "retail" : "wholesale"}`,
       name: product.name,
       category: product.category,
-      price: product.wholesalePrice,
-      quantity: product.minOrder,
+      price: priceType === "retail" ? product.retailPrice : product.wholesalePrice,
+      quantity: 1,
       image: product.image,
       minOrder: product.minOrder,
       stock: product.stock,
     };
 
     try {
-      await addToCart(item);
+      const clientKey = clientInfo ? getClientKey(clientInfo) : undefined;
+      await addToCart(item, clientKey, clientInfo, paymentMode);
       setToastType("success");
       setToastMessage(`${product.name} has been added to your cart.`);
     } catch (error) {
@@ -127,8 +170,8 @@ export default function BrowseScreen() {
       id={item.id || ""}
       name={item.name}
       category={item.category}
-      price={item.wholesalePrice}
-      originalPrice={item.retailPrice}
+      price={priceType === "retail" ? item.retailPrice : item.wholesalePrice}
+      originalPrice={priceType === "retail" ? item.wholesalePrice : item.retailPrice}
       image={item.image}
       minOrder={item.minOrder}
       rating={item.rating}
@@ -171,13 +214,27 @@ export default function BrowseScreen() {
       }
 
       if (searchQuery.trim()) {
-        const searchTerm = searchQuery.toLowerCase();
-        filtered = filtered.filter(
-          (p) =>
-            p.name.toLowerCase().includes(searchTerm) ||
-            p.brand?.toLowerCase().includes(searchTerm) ||
-            p.category.toLowerCase().includes(searchTerm),
-        );
+        const query = searchQuery.trim().toUpperCase();
+
+        // Smart search: RTN+code or WS+code
+        if (query.startsWith("RTN")) {
+          const code = query.substring(3); // Remove "RTN" prefix
+          setPriceType("retail");
+          filtered = filtered.filter((p) => (p as any).code?.includes(code));
+        } else if (query.startsWith("WS")) {
+          const code = query.substring(2); // Remove "WS" prefix
+          setPriceType("wholesale");
+          filtered = filtered.filter((p) => (p as any).code?.includes(code));
+        } else {
+          // Regular search by name, brand, category
+          const searchTerm = query.toLowerCase();
+          filtered = filtered.filter(
+            (p) =>
+              p.name.toLowerCase().includes(searchTerm) ||
+              p.brand?.toLowerCase().includes(searchTerm) ||
+              p.category.toLowerCase().includes(searchTerm),
+          );
+        }
       }
 
       switch (sortBy) {
@@ -242,8 +299,23 @@ export default function BrowseScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <Text style={styles.headerTitle}>Browse Products</Text>
-
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Products</Text>
+          {clientInfo && paymentMode && (
+            <Text style={styles.headerSubtitle}>
+              {clientInfo.storeName} • {paymentMode.toUpperCase()}
+            </Text>
+          )}
+        </View>
+        {clientInfo && paymentMode && (
+          <TouchableOpacity
+            style={[styles.newOrderBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+            onPress={handleNewOrder}
+          >
+            <MaterialIcons name="add" size={18} color="#fff" />
+            <Text style={styles.newOrderText}>New Order</Text>
+          </TouchableOpacity>
+        )}
       </View>
       <FlatList
         data={visibleProducts}
@@ -373,8 +445,21 @@ export default function BrowseScreen() {
                 }}
               >
                 <MaterialIcons name="sort" size={18} color={colors.text} />
-                <Text style={[styles.sortButtonText, { color: colors.text }]}> 
+                <Text style={[styles.sortButtonText, { color: colors.text }]}>
                   Sort: {sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.sortButton,
+                  { backgroundColor: colors.cardBg, borderColor: colors.border },
+                ]}
+                onPress={() => setPriceType(priceType === "retail" ? "wholesale" : "retail")}
+              >
+                <MaterialIcons name="price-change" size={18} color={colors.text} />
+                <Text style={[styles.sortButtonText, { color: colors.text }]}>
+                  {priceType === "retail" ? "Retail" : "Wholesale"} Price
                 </Text>
               </TouchableOpacity>
             </View>
@@ -426,6 +511,20 @@ export default function BrowseScreen() {
         onClose={() => setDetailVisible(false)}
         product={selectedProduct}
         onAddToCart={handleAddSelectedProduct}
+        priceType={priceType}
+      />
+
+      {/* Agent Order Modals */}
+      <ClientInfoModal
+        visible={clientInfoVisible}
+        onSubmit={handleClientInfoSubmit}
+        colorScheme={colorScheme}
+      />
+
+      <PaymentModeModal
+        visible={paymentModeVisible}
+        onSelect={handlePaymentModeSelect}
+        colorScheme={colorScheme}
       />
 
       <Modal
@@ -503,6 +602,24 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSizes.xxxl,
     fontWeight: Typography.fontWeights.bold,
     color: "#fff",
+  },
+  headerSubtitle: {
+    fontSize: Typography.fontSizes.sm,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 2,
+  },
+  newOrderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: 4,
+  },
+  newOrderText: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.semibold,
   },
   searchContainer: {
     paddingHorizontal: Spacing.lg,

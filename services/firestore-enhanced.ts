@@ -35,12 +35,25 @@ export interface CartItemData {
   stock: number;
 }
 
-export async function getCart(userId: string): Promise<CartItemData[]> {
+export interface ClientCart {
+  items: CartItemData[];
+  clientInfo: any;
+  paymentMode?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export async function getCart(userId: string, clientKey?: string): Promise<CartItemData[]> {
   try {
     const cartRef = doc(db, "carts", userId);
     const snapshot = await getDoc(cartRef);
     if (snapshot.exists()) {
-      return snapshot.data().items || [];
+      const data = snapshot.data();
+      if (clientKey && data[clientKey]) {
+        return data[clientKey].items || [];
+      }
+      // Fallback for old structure
+      return data.items || [];
     }
     return [];
   } catch (error) {
@@ -49,9 +62,34 @@ export async function getCart(userId: string): Promise<CartItemData[]> {
   }
 }
 
+export async function getAllClientCarts(userId: string): Promise<{ [key: string]: ClientCart }> {
+  try {
+    const cartRef = doc(db, "carts", userId);
+    const snapshot = await getDoc(cartRef);
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      // Filter out fields that aren't client carts
+      const carts: { [key: string]: ClientCart } = {};
+      for (const key in data) {
+        if (data[key].items && Array.isArray(data[key].items)) {
+          carts[key] = data[key];
+        }
+      }
+      return carts;
+    }
+    return {};
+  } catch (error) {
+    console.error("Error fetching all carts:", error);
+    throw error;
+  }
+}
+
 export async function addToCart(
   userId: string,
   item: CartItemData,
+  clientKey?: string,
+  clientInfo?: any,
+  paymentMode?: string,
 ): Promise<void> {
   // Firestore rejects undefined — normalise every field to a safe default
   const safeItem: CartItemData = {
@@ -68,10 +106,12 @@ export async function addToCart(
   try {
     const cartRef = doc(db, "carts", userId);
     const snapshot = await getDoc(cartRef);
+    const key = clientKey || "default";
 
     if (snapshot.exists()) {
       const cart = snapshot.data();
-      const items = cart.items || [];
+      const clientCart = cart[key] || { items: [], createdAt: Timestamp.now() };
+      const items = clientCart.items || [];
       const existingIndex = items.findIndex(
         (i: CartItemData) => i.productId === safeItem.productId,
       );
@@ -82,12 +122,24 @@ export async function addToCart(
         items.push(safeItem);
       }
 
-      await updateDoc(cartRef, { items, updatedAt: Timestamp.now() });
+      await updateDoc(cartRef, {
+        [key]: {
+          items,
+          clientInfo: clientInfo || clientCart.clientInfo,
+          paymentMode: paymentMode || clientCart.paymentMode,
+          createdAt: clientCart.createdAt,
+          updatedAt: Timestamp.now(),
+        },
+      });
     } else {
       await setDoc(cartRef, {
-        items: [safeItem],
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        [key]: {
+          items: [safeItem],
+          clientInfo,
+          paymentMode,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        },
       });
     }
   } catch (error) {
@@ -100,14 +152,19 @@ export async function updateCartItem(
   userId: string,
   productId: string,
   quantity: number,
+  clientKey?: string,
 ): Promise<void> {
   try {
     const cartRef = doc(db, "carts", userId);
     const snapshot = await getDoc(cartRef);
+    const key = clientKey || "default";
 
     if (snapshot.exists()) {
       const cart = snapshot.data();
-      const items = cart.items || [];
+      const clientCart = cart[key];
+      if (!clientCart) return;
+
+      const items = clientCart.items || [];
       const itemIndex = items.findIndex(
         (i: CartItemData) => i.productId === productId,
       );
@@ -118,7 +175,9 @@ export async function updateCartItem(
         } else {
           items[itemIndex].quantity = quantity;
         }
-        await updateDoc(cartRef, { items, updatedAt: Timestamp.now() });
+        await updateDoc(cartRef, {
+          [key]: { ...clientCart, items, updatedAt: Timestamp.now() },
+        });
       }
     }
   } catch (error) {
@@ -130,28 +189,69 @@ export async function updateCartItem(
 export async function removeFromCart(
   userId: string,
   productId: string,
+  clientKey?: string,
 ): Promise<void> {
   try {
+    console.log("=== removeFromCart called ===");
+    console.log("userId:", userId);
+    console.log("productId:", productId);
+    console.log("clientKey:", clientKey);
+
     const cartRef = doc(db, "carts", userId);
     const snapshot = await getDoc(cartRef);
+    const key = clientKey || "default";
+
+    console.log("snapshot.exists():", snapshot.exists());
 
     if (snapshot.exists()) {
       const cart = snapshot.data();
-      const items = (cart.items || []).filter(
+      const clientCart = cart[key];
+      console.log("clientCart before filter:", clientCart);
+
+      if (!clientCart) {
+        console.log("clientCart not found for key:", key);
+        return;
+      }
+
+      const itemsBeforeFilter = clientCart.items || [];
+      console.log("items before filter:", itemsBeforeFilter);
+
+      const items = itemsBeforeFilter.filter(
         (i: CartItemData) => i.productId !== productId,
       );
-      await updateDoc(cartRef, { items, updatedAt: Timestamp.now() });
+      console.log("items after filter:", items);
+
+      await updateDoc(cartRef, {
+        [key]: { ...clientCart, items, updatedAt: Timestamp.now() },
+      });
+
+      console.log("=== removeFromCart SUCCESS ===");
+      console.log("Firestore updated successfully");
+    } else {
+      console.log("Cart document does not exist for userId:", userId);
     }
   } catch (error) {
+    console.error("=== removeFromCart FAILED ===");
     console.error("Error removing from cart:", error);
     throw error;
   }
 }
 
-export async function clearCart(userId: string): Promise<void> {
+export async function clearCart(userId: string, clientKey?: string): Promise<void> {
   try {
     const cartRef = doc(db, "carts", userId);
-    await updateDoc(cartRef, { items: [], updatedAt: Timestamp.now() });
+    const key = clientKey || "default";
+    const snapshot = await getDoc(cartRef);
+
+    if (snapshot.exists()) {
+      const cart = snapshot.data();
+      const clientCart = cart[key];
+      if (!clientCart) return;
+
+      await updateDoc(cartRef, {
+        [key]: { ...clientCart, items: [], updatedAt: Timestamp.now() },
+      });
+    }
   } catch (error) {
     console.error("Error clearing cart:", error);
     throw error;
@@ -160,25 +260,44 @@ export async function clearCart(userId: string): Promise<void> {
 
 // ============ ORDER OPERATIONS ============
 
+export interface ClientInfoData {
+  completeName: string;
+  storeName: string;
+  address: string;
+  contactNo: string;
+  pinLocation: string;
+  storeImage: string;
+}
+
 export interface OrderData {
-  userId: string;
+  userId: string; // Agent ID
   items: CartItemData[];
   total: number;
   status: "pending" | "packing" | "in-transit" | "delivered" | "cancelled";
   paymentStatus: "pending" | "paid" | "completed";
   paymentMethod: string;
+  paymentMode?: "cash" | "card" | "check" | "bank-transfer"; // Mode of payment for agent orders
   shippingAddress: string;
   notes?: string;
+  // Client information (embedded for agent orders)
+  clientInfo?: ClientInfoData;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
 export async function createOrder(order: OrderData): Promise<string> {
   try {
+    console.log("=== createOrder in firestore-enhanced.ts ===");
+    console.log("order object:", order);
+
     const ordersRef = collection(db, "orders");
     const docRef = await addDoc(ordersRef, order);
+
+    console.log("=== createOrder SUCCESS ===");
+    console.log("Order created with ID:", docRef.id);
     return docRef.id;
   } catch (error) {
+    console.error("=== createOrder FAILED ===");
     console.error("Error creating order:", error);
     throw error;
   }

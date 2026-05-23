@@ -18,6 +18,7 @@ interface SuccessModalProps {
   message?: string;
   orderId?: string;
   autoCloseDelay?: number;
+  type?: 'success' | 'error';
 }
 
 export function SuccessModal({
@@ -27,10 +28,15 @@ export function SuccessModal({
   message = 'Your order has been placed successfully.',
   orderId,
   autoCloseDelay = 3000,
+  type = 'success',
 }: SuccessModalProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
+
+  const isError = type === 'error';
+  const iconColor = isError ? '#F44336' : colors.primary;
+  const iconName = isError ? 'cancel' : 'check-circle';
 
   useEffect(() => {
     if (visible) {
@@ -66,11 +72,11 @@ export function SuccessModal({
             },
           ]}
         >
-          <View style={styles.iconContainer}>
+          <View style={[styles.iconContainer, isError && { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]}>
             <MaterialIcons
-              name="check-circle"
+              name={iconName as any}
               size={64}
-              color={colors.primary}
+              color={iconColor}
             />
           </View>
 
@@ -94,7 +100,7 @@ export function SuccessModal({
           )}
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.primary }]}
+            style={[styles.button, { backgroundColor: isError ? '#F44336' : colors.primary }]}
             onPress={onClose}
           >
             <Text style={styles.buttonText}>Continue</Text>
@@ -128,6 +134,9 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+    borderRadius: 50,
+    backgroundColor: 'rgba(25, 118, 210, 0.1)',
   },
   title: {
     fontSize: Typography.sizes.xxl,
