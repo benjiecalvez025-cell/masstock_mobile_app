@@ -2,7 +2,11 @@ import { CategoryCard } from "@/components/category-card";
 import { HubButton } from "@/components/hub-button";
 import { ProductCard } from "@/components/product-card";
 import { QuickAccessItem } from "@/components/quick-access-item";
+<<<<<<< HEAD
 import { Colors, Shadows, Spacing, Typography } from "@/constants/theme";
+=======
+import { Colors, Shadows, Spacing, Typography, BorderRadius } from "@/constants/theme";
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 import { useAppContext } from "@/context/app-context";
 import { Product, useCategories, useOrders, useProducts } from "@/hooks/use-firestore";
 import { useRouter } from "expo-router";
@@ -58,12 +62,17 @@ export default function HomeScreen() {
       id: "products",
       label: "Products",
       value: `${totalProducts}`,
+<<<<<<< HEAD
       caption: "Available in marketplace",
+=======
+      caption: "Available",
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     },
     {
       id: "categories",
       label: "Categories",
       value: `${categories.length}`,
+<<<<<<< HEAD
       caption: "Active product sections",
     },
     {
@@ -71,6 +80,15 @@ export default function HomeScreen() {
       label: "Top Category",
       value: topCategory,
       caption: "Most stocked category",
+=======
+      caption: "Sections",
+    },
+    {
+      id: "top",
+      label: "Top Pick",
+      value: topCategory,
+      caption: "Category",
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     },
   ];
 
@@ -137,6 +155,7 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
     >
+<<<<<<< HEAD
       <View style={[styles.hero, { backgroundColor: colors.primary }]}> 
         <View style={styles.heroText}>
           <Text style={styles.greeting}>Hello, {user?.name?.split(" ")[0] || "Guest"}! ??</Text>
@@ -148,10 +167,38 @@ export default function HomeScreen() {
           <Text style={styles.walletAmount}>₱{(user?.ewallet || 0).toLocaleString()}</Text>
           <Text style={[styles.walletSub, { color: colors.textSecondary }]}>
             {activeOrdersCount} active order{activeOrdersCount !== 1 ? "s" : ""} • {totalProducts} products available
+=======
+      {/* Hero Section */}
+      <View style={[styles.hero, { backgroundColor: colors.primary }]}>
+        <View style={styles.heroText}>
+          <Text style={styles.greeting}>
+            Hello, {user?.name?.split(" ")[0] || "Guest"}!
+          </Text>
+          <Text style={styles.date}>{formattedDate}</Text>
+        </View>
+
+        <View
+          style={[
+            styles.walletCard,
+            { backgroundColor: colors.surface },
+            Shadows.sm,
+          ]}
+        >
+          <Text style={[styles.walletLabel, { color: colors.textSecondary }]}>
+            E-Wallet Balance
+          </Text>
+          <Text style={[styles.walletAmount, { color: colors.primary }]}>
+            ₱{(user?.ewallet || 0).toLocaleString()}
+          </Text>
+          <Text style={[styles.walletSub, { color: colors.textSecondary }]}>
+            {activeOrdersCount} active order{activeOrdersCount !== 1 ? "s" : ""} •{" "}
+            {totalProducts} products
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
           </Text>
         </View>
       </View>
 
+<<<<<<< HEAD
       <View style={styles.metricsRow}>
         {metrics.map((item) => (
           <View key={item.id} style={[styles.metricCard, Shadows.sm, { backgroundColor: colors.surface }]}> 
@@ -183,6 +230,63 @@ export default function HomeScreen() {
 
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Access</Text>
+=======
+      {/* Metrics Row */}
+      <View style={styles.metricsSection}>
+        <View style={styles.metricsRow}>
+          {metrics.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.metricCard,
+                { backgroundColor: colors.surface },
+                Shadows.sm,
+              ]}
+            >
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                {item.label}
+              </Text>
+              <Text style={[styles.metricValue, { color: colors.primary }]}>
+                {item.value}
+              </Text>
+              <Text style={[styles.metricCaption, { color: colors.textSecondary }]}>
+                {item.caption}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Platform Hubs */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Platform Hubs
+          </Text>
+          <TouchableOpacity onPress={() => router.push("/(tabs)/browse")}>
+            <Text style={[styles.viewAll, { color: colors.primary }]}>Explore</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.hubsContainer}>
+          {hubs.map((hub) => (
+            <HubButton
+              key={hub.title}
+              title={hub.title}
+              subtitle={hub.subtitle}
+              iconName={hub.iconName}
+              color={hub.color}
+              onPress={() => router.push(hub.route)}
+            />
+          ))}
+        </View>
+      </View>
+
+      {/* Quick Access */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Quick Access
+        </Text>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
         <FlatList
           data={quickAccess}
           renderItem={({ item }) => (
@@ -201,6 +305,7 @@ export default function HomeScreen() {
         />
       </View>
 
+<<<<<<< HEAD
       {!categoriesLoading && categories.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -211,6 +316,30 @@ export default function HomeScreen() {
           </View>
           <FlatList
             data={categories.slice(0, 8).map((cat, idx) => ({ id: idx.toString(), name: cat, icon: "local-grocery-store", color: colors.primary }))}
+=======
+      {/* Popular Categories */}
+      {!categoriesLoading && categories.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Popular Categories
+            </Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/browse")}>
+              <Text style={[styles.viewAll, { color: colors.primary }]}>
+                View All
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={categories
+              .slice(0, 8)
+              .map((cat, idx) => ({
+                id: idx.toString(),
+                name: cat,
+                icon: "local-grocery-store",
+                color: colors.primary,
+              }))}
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
             renderItem={({ item }) => (
               <CategoryCard
                 id={item.id}
@@ -228,12 +357,26 @@ export default function HomeScreen() {
         </View>
       )}
 
+<<<<<<< HEAD
       {!productsLoading && featuredProducts.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Top Rated Products</Text>
             <TouchableOpacity onPress={() => router.push("/(tabs)/browse")}> 
               <Text style={[styles.viewAll, { color: colors.primary }]}>See More</Text>
+=======
+      {/* Top Rated Products */}
+      {!productsLoading && featuredProducts.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Top Rated Products
+            </Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/browse")}>
+              <Text style={[styles.viewAll, { color: colors.primary }]}>
+                See More
+              </Text>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
             </TouchableOpacity>
           </View>
           <FlatList
@@ -260,6 +403,7 @@ export default function HomeScreen() {
         </View>
       )}
 
+<<<<<<< HEAD
       {isLoading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
@@ -278,6 +422,48 @@ export default function HomeScreen() {
       </View>
 
       <View style={{ height: Spacing.xxxl }} />
+=======
+      {/* Loading State */}
+      {isLoading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text
+            style={[styles.loadingText, { color: colors.textSecondary }]}
+          >
+            Loading marketplace data...
+          </Text>
+        </View>
+      )}
+
+      {/* Promo Banner */}
+      <View style={styles.section}>
+        <View
+          style={[
+            styles.promoBanner,
+            { backgroundColor: colors.accentBg },
+            Shadows.md,
+          ]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.promoTitle, { color: colors.text }]}>
+              Bulk Order Savings
+            </Text>
+            <Text style={[styles.promoText, { color: colors.textSecondary }]}>
+              Unlock better prices when you order 50+ items today.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.promoCTA, { backgroundColor: colors.primary }]}
+            onPress={() => router.push("/(tabs)/browse")}
+          >
+            <Text style={styles.promoCTAText}>Shop Deals</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Bottom Spacing */}
+      <View style={{ height: Spacing.xl }} />
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     </ScrollView>
   );
 }
@@ -289,10 +475,21 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: Spacing.xxxl,
   },
+<<<<<<< HEAD
   hero: {
     padding: Spacing.xl,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+=======
+
+  // ── Hero Section ────────────────────────────────────────────────────────
+  hero: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.xl,
+    borderBottomLeftRadius: BorderRadius.xl,
+    borderBottomRightRadius: BorderRadius.xl,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   },
   heroText: {
     marginBottom: Spacing.lg,
@@ -301,6 +498,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSizes.xxxxl,
     fontWeight: Typography.fontWeights.bold,
     color: "#fff",
+<<<<<<< HEAD
     marginBottom: Spacing.sm,
   },
   date: {
@@ -317,10 +515,29 @@ const styles = StyleSheet.create({
     color: "#1A3A52",
     fontWeight: Typography.fontWeights.medium,
     marginBottom: Spacing.xs,
+=======
+    marginBottom: Spacing.xs,
+    lineHeight: 40,
+  },
+  date: {
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.medium,
+    color: "rgba(255,255,255,0.8)",
+  },
+  walletCard: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+  },
+  walletLabel: {
+    fontSize: Typography.fontSizes.xs,
+    fontWeight: Typography.fontWeights.medium,
+    marginBottom: Spacing.sm,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   },
   walletAmount: {
     fontSize: Typography.fontSizes.xxxl,
     fontWeight: Typography.fontWeights.extrabold,
+<<<<<<< HEAD
     color: "#1A3A52",
   },
   walletSub: {
@@ -332,17 +549,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: Spacing.lg,
     marginTop: -Spacing.xl,
+=======
+    marginBottom: Spacing.sm,
+  },
+  walletSub: {
+    fontSize: Typography.fontSizes.xs,
+    fontWeight: Typography.fontWeights.medium,
+  },
+
+  // ── Metrics Section ──────────────────────────────────────────────────────
+  metricsSection: {
+    paddingHorizontal: Spacing.lg,
+    marginTop: -Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  metricsRow: {
+    flexDirection: "row",
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     gap: Spacing.md,
   },
   metricCard: {
     flex: 1,
     padding: Spacing.lg,
+<<<<<<< HEAD
     borderRadius: 20,
     minWidth: 110,
+=======
+    borderRadius: BorderRadius.lg,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   },
   metricLabel: {
     fontSize: Typography.fontSizes.xs,
     fontWeight: Typography.fontWeights.medium,
+<<<<<<< HEAD
     marginBottom: Spacing.xs,
   },
   metricValue: {
@@ -356,21 +595,56 @@ const styles = StyleSheet.create({
   section: {
     marginTop: Spacing.xl,
     paddingHorizontal: Spacing.lg,
+=======
+    marginBottom: Spacing.sm,
+  },
+  metricValue: {
+    fontSize: Typography.fontSizes.xl,
+    fontWeight: Typography.fontWeights.extrabold,
+    marginBottom: Spacing.xs,
+  },
+  metricCaption: {
+    fontSize: Typography.fontSizes.xs,
+    fontWeight: Typography.fontWeights.regular,
+  },
+
+  // ── Sections ─────────────────────────────────────────────────────────────
+  section: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.xl,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+<<<<<<< HEAD
     marginBottom: Spacing.md,
   },
   sectionTitle: {
     fontSize: Typography.fontSizes.xl,
+=======
+    marginBottom: Spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: Typography.fontSizes.lg,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     fontWeight: Typography.fontWeights.bold,
   },
   viewAll: {
     fontSize: Typography.fontSizes.sm,
     fontWeight: Typography.fontWeights.semibold,
   },
+<<<<<<< HEAD
+=======
+
+  // ── Hubs ─────────────────────────────────────────────────────────────────
+  hubsContainer: {
+    gap: Spacing.md,
+  },
+
+  // ── Quick Access ─────────────────────────────────────────────────────────
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   quickAccessRow: {
     justifyContent: "space-between",
     gap: Spacing.md,
@@ -378,6 +652,7 @@ const styles = StyleSheet.create({
   quickAccessList: {
     gap: Spacing.md,
   },
+<<<<<<< HEAD
   categoryList: {
     paddingVertical: Spacing.sm,
     gap: Spacing.sm,
@@ -421,6 +696,59 @@ const styles = StyleSheet.create({
   },
   promoCTAText: {
     color: "#fff",
+=======
+
+  // ── Categories & Products ────────────────────────────────────────────────
+  categoryList: {
+    paddingVertical: Spacing.xs,
+    gap: Spacing.md,
+  },
+  productList: {
+    paddingVertical: Spacing.xs,
+    gap: Spacing.md,
+  },
+
+  // ── Loading State ────────────────────────────────────────────────────────
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.xl,
+  },
+  loadingText: {
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.medium,
+    marginTop: Spacing.md,
+  },
+
+  // ── Promo Banner ─────────────────────────────────────────────────────────
+  promoBanner: {
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  promoTitle: {
+    fontSize: Typography.fontSizes.lg,
+    fontWeight: Typography.fontWeights.bold,
+    marginBottom: Spacing.sm,
+  },
+  promoText: {
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.regular,
+    lineHeight: 18,
+    maxWidth: 200,
+  },
+  promoCTA: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  promoCTAText: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.sm,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     fontWeight: Typography.fontWeights.bold,
   },
 });

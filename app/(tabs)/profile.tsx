@@ -2,10 +2,19 @@ import React, { useState, useMemo } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppContext } from "@/context/app-context";
+<<<<<<< HEAD
 import { useOrders } from "@/hooks/use-firestore";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+=======
+import { useOrders, useAgentComparison } from "@/hooks/use-firestore";
+import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { OrderDetailModal } from "@/components/modals/order-detail-modal";
+import { AgentComparisonModal } from "@/components/modals/agent-comparison-modal";
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 
 export default function ProfileScreen() {
   const colorScheme = useColorScheme() ?? "light";
@@ -15,6 +24,13 @@ export default function ProfileScreen() {
   const { orders } = useOrders(user?.id);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+<<<<<<< HEAD
+=======
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [orderDetailVisible, setOrderDetailVisible] = useState(false);
+  const [agentComparisonVisible, setAgentComparisonVisible] = useState(false);
+  const { agents, sortByCommission, sortBySales } = useAgentComparison(selectedMonth, selectedYear);
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 
   // Filter orders by month and year
   const filteredOrders = useMemo(() => {
@@ -43,12 +59,44 @@ export default function ProfileScreen() {
   const currentMonth = months[selectedMonth];
   const currentYear = selectedYear;
 
+<<<<<<< HEAD
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+=======
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "delivered":
+        return "#4CAF50";
+      case "in-transit":
+        return "#2196F3";
+      case "packing":
+        return "#FF9800";
+      case "cancelled":
+        return "#F44336";
+      case "pending":
+        return "#9C27B0";
+      default:
+        return colors.secondary;
+    }
+  };
+
+  const handleOrderRowPress = (order: any) => {
+    setSelectedOrder(order);
+    setOrderDetailVisible(true);
+  };
+
+  return (
+    <>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
       <View style={[styles.profileCard, { backgroundColor: colors.surface }]}> 
         <Text style={[styles.title, { color: colors.text }]}>Account</Text>
         <Text style={[styles.userName, { color: colors.text }]}>{user?.name || "Guest User"}</Text>
@@ -125,15 +173,36 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+<<<<<<< HEAD
+=======
+        {/* View All Agents Button */}
+        <TouchableOpacity
+          style={[styles.viewAllButton, { backgroundColor: colors.accent }]}
+          onPress={() => setAgentComparisonVisible(true)}
+        >
+          <MaterialIcons name="leaderboard" size={16} color="#fff" />
+          <Text style={styles.viewAllButtonText}>View All Agents</Text>
+        </TouchableOpacity>
+
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
         {/* Summary Table */}
         <View style={[styles.table, { borderColor: colors.border ?? "#e0e0e0" }]}>
           {/* Table Header */}
           <View style={[styles.tableRow, styles.tableHeader, { backgroundColor: colors.primary }]}>
+<<<<<<< HEAD
             <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 1.2 }]}>Sales Man</Text>
             <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 1.8 }]}>Supplier</Text>
             <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.9, textAlign: "right" }]}>Total</Text>
             <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.7, textAlign: "center" }]}>% Rate</Text>
             <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.8, textAlign: "right" }]}>Amount</Text>
+=======
+            <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 1 }]}>Sales Man</Text>
+            <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 1.5 }]}>Supplier</Text>
+            <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.8, textAlign: "right" }]}>Total</Text>
+            <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.6, textAlign: "center" }]}>Status</Text>
+            <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.6, textAlign: "center" }]}>% Rate</Text>
+            <Text style={[styles.tableCell, styles.tableCellHeader, { color: "#fff", flex: 0.7, textAlign: "right" }]}>Amount</Text>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
           </View>
 
           {/* Table Body */}
@@ -144,6 +213,7 @@ export default function ProfileScreen() {
             </View>
           ) : (
             filteredOrders.map((order) => (
+<<<<<<< HEAD
               <View key={order.id} style={[styles.tableRow, { borderBottomColor: colors.border ?? "#e0e0e0" }]}>
                 <Text style={[styles.tableCell, { flex: 1.2, color: colors.text }]} numberOfLines={1}>
                   {user?.name || "Agent"}
@@ -161,11 +231,47 @@ export default function ProfileScreen() {
                   -
                 </Text>
               </View>
+=======
+              <TouchableOpacity
+                key={order.id}
+                onPress={() => handleOrderRowPress(order)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.tableRow, { borderBottomColor: colors.border ?? "#e0e0e0" }]}>
+                  <Text style={[styles.tableCell, { flex: 1, color: colors.text }]} numberOfLines={1}>
+                    {user?.name || "Agent"}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 1.5, color: colors.text }]} numberOfLines={1}>
+                    {order.clientInfo?.storeName || "Store"}
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 0.8, color: colors.text, textAlign: "right" }]}>
+                    ₱{(order.total || 0).toLocaleString()}
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusBadgeSmall,
+                      { backgroundColor: getStatusColor(order.status) },
+                    ]}
+                  >
+                    <Text style={styles.statusBadgeText}>
+                      {order.status?.slice(0, 3).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={[styles.tableCell, { flex: 0.6, color: colors.text, textAlign: "center" }]}>
+                    0.30%
+                  </Text>
+                  <Text style={[styles.tableCell, { flex: 0.7, color: colors.primary, textAlign: "right", fontWeight: "600" }]}>
+                    -
+                  </Text>
+                </View>
+              </TouchableOpacity>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
             ))
           )}
 
           {/* Summary Row */}
           <View style={[styles.tableRow, styles.summaryRow, { backgroundColor: colors.accent }]}>
+<<<<<<< HEAD
             <Text style={[styles.tableCell, styles.summaryCell, { flex: 1.2, color: colors.text, fontWeight: "700" }]}>
               TOTAL
             </Text>
@@ -175,6 +281,18 @@ export default function ProfileScreen() {
             </Text>
             <Text style={[styles.tableCell, { flex: 0.7 }]}></Text>
             <Text style={[styles.tableCell, styles.summaryCell, { flex: 0.8, color: colors.text, textAlign: "right", fontWeight: "700" }]}>
+=======
+            <Text style={[styles.tableCell, styles.summaryCell, { flex: 1, color: colors.text, fontWeight: "700" }]}>
+              TOTAL
+            </Text>
+            <Text style={[styles.tableCell, { flex: 1.5 }]}></Text>
+            <Text style={[styles.tableCell, styles.summaryCell, { flex: 0.8, color: colors.text, textAlign: "right", fontWeight: "700" }]}>
+              ₱{summary.total.toLocaleString()}
+            </Text>
+            <Text style={[styles.tableCell, { flex: 0.6 }]}></Text>
+            <Text style={[styles.tableCell, { flex: 0.6 }]}></Text>
+            <Text style={[styles.tableCell, styles.summaryCell, { flex: 0.7, color: colors.text, textAlign: "right", fontWeight: "700" }]}>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
               ₱{summary.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
@@ -201,7 +319,28 @@ export default function ProfileScreen() {
         <Text style={[styles.cardTitle, { color: colors.text }]}>Help & Support</Text>
         <Text style={[styles.cardDescription, { color: colors.textSecondary }]}>Contact support anytime from within the Masstock app if you need help with orders, payments, or your seller dashboard.</Text>
       </View>
+<<<<<<< HEAD
     </ScrollView>
+=======
+      </ScrollView>
+
+      {/* Modals */}
+      <OrderDetailModal
+        visible={orderDetailVisible}
+        onClose={() => setOrderDetailVisible(false)}
+        order={selectedOrder}
+      />
+
+      <AgentComparisonModal
+        visible={agentComparisonVisible}
+        onClose={() => setAgentComparisonVisible(false)}
+        agents={agents}
+        currentUserId={user?.id}
+        onSortBySales={sortBySales}
+        onSortByCommission={sortByCommission}
+      />
+    </>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   );
 }
 
@@ -360,4 +499,34 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSizes.md,
     fontWeight: Typography.fontWeights.bold,
   },
+<<<<<<< HEAD
+=======
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  viewAllButtonText: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.semibold,
+  },
+  statusBadgeSmall: {
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusBadgeText: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.xs,
+    fontWeight: Typography.fontWeights.bold,
+  },
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 });

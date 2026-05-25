@@ -617,6 +617,7 @@ export default function StoreScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top bar */}
       <View style={[styles.topBar, { backgroundColor: colors.primary }]}>
+<<<<<<< HEAD
         <View>
           <Text style={styles.topBarTitle}>Store Inventory</Text>
           <Text style={styles.topBarSub}>{store?.name ?? "My Store"}</Text>
@@ -627,6 +628,18 @@ export default function StoreScreen() {
             Add Product
           </Text>
         </TouchableOpacity>
+=======
+        <View style={styles.topBarContent}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.topBarTitle}>Store Inventory</Text>
+            <Text style={styles.topBarSub}>Manage your {store?.name ?? "store"} products</Text>
+          </View>
+          <TouchableOpacity style={styles.topBarActionBtn} onPress={openAdd}>
+            <MaterialIcons name="add" size={20} color="#fff" />
+            <Text style={styles.topBarActionText}>Add Product</Text>
+          </TouchableOpacity>
+        </View>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
       </View>
 
       {loading && products.length === 0 ? (
@@ -855,6 +868,7 @@ const styles = StyleSheet.create({
 
   // Top bar
   topBar: {
+<<<<<<< HEAD
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -864,10 +878,26 @@ const styles = StyleSheet.create({
   },
   topBarTitle: {
     fontSize: Typography.fontSizes.xxl,
+=======
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    paddingTop: Spacing.xxl,
+    borderBottomLeftRadius: BorderRadius.xl,
+    borderBottomRightRadius: BorderRadius.xl,
+  },
+  topBarContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  topBarTitle: {
+    fontSize: Typography.fontSizes.xxxl,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     fontWeight: Typography.fontWeights.bold,
     color: "#fff",
   },
   topBarSub: {
+<<<<<<< HEAD
     fontSize: Typography.fontSizes.sm,
     color: "rgba(255,255,255,0.8)",
     marginTop: 2,
@@ -884,6 +914,25 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: Typography.fontSizes.sm,
     fontWeight: Typography.fontWeights.bold,
+=======
+    marginTop: Spacing.sm,
+    fontSize: Typography.fontSizes.md,
+    color: "#F0F8FF",
+  },
+  topBarActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: BorderRadius.md,
+  },
+  topBarActionText: {
+    color: "#fff",
+    fontSize: Typography.fontSizes.sm,
+    fontWeight: Typography.fontWeights.semibold,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   },
 
   // List

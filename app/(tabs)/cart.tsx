@@ -5,6 +5,10 @@ import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useAppContext } from "@/context/app-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useCart, useOrders } from "@/hooks/use-firestore";
+<<<<<<< HEAD
+=======
+import { saveClient } from "@/services/firestore-enhanced";
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useMemo, useState } from "react";
@@ -191,6 +195,21 @@ export default function CartScreen() {
         throw new Error("Failed to create order - orderId is null/undefined");
       }
 
+<<<<<<< HEAD
+=======
+      // Save client information to Firestore for future reuse
+      if (user?.id && clientInfoData) {
+        try {
+          console.log("=== SAVING CLIENT ===");
+          await saveClient(user.id, clientInfoData);
+          console.log("Client saved successfully");
+        } catch (saveError) {
+          console.warn("Warning: Failed to save client info:", saveError);
+          // Don't fail the order if client save fails
+        }
+      }
+
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
       console.log("=== CLEARING CART ===");
       // Clear cart for this specific client
       if (selectedClientKey) {
@@ -206,7 +225,11 @@ export default function CartScreen() {
       console.log("=== ORDER SUCCESS ===");
       setSuccessData({
         type: "success",
+<<<<<<< HEAD
         title: "Order Placed! ✅",
+=======
+        title: "Order Placed",
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
         message: `Order Total: ₱${parseFloat(grandTotal.toFixed(2)).toLocaleString()}\n\nPayment Mode: ${paymentModeData || "Cash"}\n\nDelivering to:\n${clientInfoData?.storeName ?? "Client Store"}`,
         orderId: orderId,
       });

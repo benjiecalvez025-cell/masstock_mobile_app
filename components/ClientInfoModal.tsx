@@ -20,6 +20,10 @@ import { Colors, Spacing, BorderRadius, Typography } from "@/constants/theme";
 interface ClientInfoModalProps {
   visible: boolean;
   onSubmit: (clientInfo: ClientInfo) => void;
+<<<<<<< HEAD
+=======
+  onBack?: () => void;
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   colorScheme: "light" | "dark";
 }
 
@@ -28,6 +32,10 @@ const placeholder = "https://via.placeholder.com/200?text=Store+Image";
 export default function ClientInfoModal({
   visible,
   onSubmit,
+<<<<<<< HEAD
+=======
+  onBack,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   colorScheme,
 }: ClientInfoModalProps) {
   const colors = Colors[colorScheme];
@@ -111,10 +119,27 @@ export default function ClientInfoModal({
     >
       <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
         <View style={styles.header}>
+<<<<<<< HEAD
           <Text style={[styles.title, { color: colors.text }]}>Client Information</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Please provide details for this order
           </Text>
+=======
+          {onBack && (
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={onBack}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+          )}
+          <View style={styles.headerTitle}>
+            <Text style={[styles.title, { color: colors.text }]}>Client Information</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Please provide details for this order
+            </Text>
+          </View>
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollContent}>
@@ -225,10 +250,25 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
   },
   header: {
+<<<<<<< HEAD
+=======
+    flexDirection: "row",
+    alignItems: "flex-start",
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
+<<<<<<< HEAD
+=======
+    gap: Spacing.md,
+  },
+  backButton: {
+    paddingTop: Spacing.xs,
+  },
+  headerTitle: {
+    flex: 1,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
   },
   title: {
     fontSize: Typography.fontSizes.xl,

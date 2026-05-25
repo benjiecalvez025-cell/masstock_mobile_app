@@ -31,6 +31,14 @@ import {
     deleteProduct,
     updateProduct,
     claimUnownedProducts,
+<<<<<<< HEAD
+=======
+    saveClient,
+    getUserClients,
+    deleteClient,
+    getAllUsers,
+    getAgentOrdersByMonth,
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 } from "@/services/firestore-enhanced";
 import { Timestamp, doc, onSnapshot, collection, query, where, orderBy, getDocs } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -795,3 +803,155 @@ export function useCategories() {
     error,
   };
 }
+<<<<<<< HEAD
+=======
+
+// ============ useClients HOOK ============
+
+export function useClients(userId?: string) {
+  const [clients, setClients] = useState<(any & { id: string })[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    const clientsRef = collection(db, "clients", userId, "agents");
+    const unsubscribe = onSnapshot(
+      clientsRef,
+      (snapshot) => {
+        try {
+          const clientList = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as (any & { id: string })[];
+          setClients(clientList);
+          setError(null);
+          setLoading(false);
+        } catch (err) {
+          console.error("Error processing clients snapshot:", err);
+          setError("Failed to load clients");
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error("Error subscribing to clients:", err);
+        setError("Failed to load clients");
+        setLoading(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [userId]);
+
+  const handleSaveClient = async (clientInfo: any): Promise<string | null> => {
+    if (!userId) return null;
+    try {
+      const clientId = await saveClient(userId, clientInfo);
+      return clientId;
+    } catch (err) {
+      console.error("Error saving client:", err);
+      setError("Failed to save client");
+      return null;
+    }
+  };
+
+  const handleDeleteClient = async (clientId: string): Promise<void> => {
+    if (!userId) return;
+    try {
+      await deleteClient(userId, clientId);
+      setError(null);
+    } catch (err) {
+      console.error("Error deleting client:", err);
+      setError("Failed to delete client");
+      throw err;
+    }
+  };
+
+  return {
+    clients,
+    loading,
+    error,
+    saveClient: handleSaveClient,
+    deleteClient: handleDeleteClient,
+  };
+}
+
+// ============ useAgentComparison HOOK ============
+
+export function useAgentComparison(month: number, year: number) {
+  const [agents, setAgents] = useState<
+    Array<{
+      id: string;
+      name: string;
+      totalOrders: number;
+      totalSales: number;
+      commission: number;
+      averageOrderValue: number;
+    }>
+  >([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchAgentComparison = async () => {
+      try {
+        setLoading(true);
+        const allUsers = await getAllUsers();
+
+        const agentStats = await Promise.all(
+          allUsers.map(async (user) => {
+            const orders = await getAgentOrdersByMonth(user.id, month, year);
+            const totalOrders = orders.length;
+            const totalSales = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+            const commission = totalSales * 0.003;
+            const averageOrderValue =
+              totalOrders > 0 ? totalSales / totalOrders : 0;
+
+            return {
+              id: user.id,
+              name: user.name || "Unknown Agent",
+              totalOrders,
+              totalSales,
+              commission,
+              averageOrderValue,
+            };
+          }),
+        );
+
+        agentStats.sort((a, b) => b.totalSales - a.totalSales);
+        setAgents(agentStats);
+        setError(null);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching agent comparison:", err);
+        setError("Failed to load agent data");
+        setLoading(false);
+      }
+    };
+
+    fetchAgentComparison();
+  }, [month, year]);
+
+  const sortByCommission = () => {
+    setAgents([...agents].sort((a, b) => b.commission - a.commission));
+  };
+
+  const sortBySales = () => {
+    setAgents([...agents].sort((a, b) => b.totalSales - a.totalSales));
+  };
+
+  return {
+    agents,
+    loading,
+    error,
+    sortByCommission,
+    sortBySales,
+  };
+}
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267

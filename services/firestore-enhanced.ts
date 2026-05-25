@@ -772,6 +772,144 @@ export async function updateProduct(
   }
 }
 
+<<<<<<< HEAD
+=======
+// ============ CLIENT MANAGEMENT ============
+
+export async function saveClient(
+  userId: string,
+  clientInfo: CartItemData extends never ? any : Omit<any, "id">,
+): Promise<string> {
+  try {
+    const clientsRef = collection(db, "clients", userId, "agents");
+
+    const existingQuery = query(
+      clientsRef,
+      where("storeName", "==", clientInfo.storeName),
+      where("contactNo", "==", clientInfo.contactNo),
+    );
+    const snapshot = await getDocs(existingQuery);
+
+    if (snapshot.docs.length > 0) {
+      const existingDoc = snapshot.docs[0];
+      await updateDoc(existingDoc.ref, {
+        ...clientInfo,
+        updatedAt: Timestamp.now(),
+      });
+      return existingDoc.id;
+    }
+
+    const docRef = await addDoc(clientsRef, {
+      ...clientInfo,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Error saving client:", error);
+    throw error;
+  }
+}
+
+export async function getUserClients(
+  userId: string,
+): Promise<(any & { id: string })[]> {
+  try {
+    const clientsRef = collection(db, "clients", userId, "agents");
+    const snapshot = await getDocs(clientsRef);
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as (any & { id: string })[];
+  } catch (error) {
+    console.error("Error fetching user clients:", error);
+    return [];
+  }
+}
+
+export async function deleteClient(
+  userId: string,
+  clientId: string,
+): Promise<void> {
+  try {
+    const clientRef = doc(db, "clients", userId, "agents", clientId);
+    await deleteDoc(clientRef);
+  } catch (error) {
+    console.error("Error deleting client:", error);
+    throw error;
+  }
+}
+
+// ============ AGENT & USER MANAGEMENT ============
+
+export async function getAllUsers(): Promise<(any & { id: string })[]> {
+  try {
+    const usersQuery = query(collection(db, "users"));
+    const snapshot = await getDocs(usersQuery);
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as (any & { id: string })[];
+  } catch (error) {
+    console.error("Error fetching all users:", error);
+    return [];
+  }
+}
+
+export async function getAgentOrdersByMonth(
+  userId: string,
+  month: number,
+  year: number,
+): Promise<OrderData[]> {
+  try {
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+
+    const q = query(
+      collection(db, "orders"),
+      where("userId", "==", userId),
+      where("createdAt", ">=", Timestamp.fromDate(startOfMonth)),
+      where("createdAt", "<=", Timestamp.fromDate(endOfMonth)),
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as OrderData[];
+  } catch (error: any) {
+    console.error("Error fetching agent orders by month:", error?.message);
+    if (
+      error?.message?.includes("index") ||
+      error?.code === "failed-precondition"
+    ) {
+      console.warn("⚠️ Index missing - using fallback query");
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", userId),
+      );
+      const snapshot = await getDocs(q);
+      const allOrders = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as OrderData[];
+
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0);
+
+      return allOrders.filter((order) => {
+        const orderDate =
+          order.createdAt?.toDate?.() || new Date(order.createdAt);
+        return orderDate >= startOfMonth && orderDate <= endOfMonth;
+      });
+    }
+    return [];
+  }
+}
+
+>>>>>>> de0fad422e2d20ea1624737c7a5a5c2b53602267
 // ============ UTILITY FUNCTIONS ============
 
 export function calculateDiscount(
