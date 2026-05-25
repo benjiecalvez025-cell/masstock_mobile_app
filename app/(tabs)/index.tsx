@@ -2,12 +2,23 @@ import { CategoryCard } from "@/components/category-card";
 import { HubButton } from "@/components/hub-button";
 import { ProductCard } from "@/components/product-card";
 import { QuickAccessItem } from "@/components/quick-access-item";
-import { Colors, Shadows, Spacing, Typography, BorderRadius } from "@/constants/theme";
+import {
+  BorderRadius,
+  Colors,
+  Shadows,
+  Spacing,
+  Typography,
+} from "@/constants/theme";
 import { useAppContext } from "@/context/app-context";
-import { Product, useCategories, useOrders, useProducts } from "@/hooks/use-firestore";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  Product,
+  useCategories,
+  useOrders,
+  useProducts,
+} from "@/hooks/use-firestore";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   ActivityIndicator,
   FlatList,
@@ -39,12 +50,15 @@ export default function HomeScreen() {
 
   const totalProducts = products.length;
   const topCategory = useMemo(() => {
-    const categoryCounts = products.reduce<Record<string, number>>((counts, product) => {
-      if (product.category) {
-        counts[product.category] = (counts[product.category] || 0) + 1;
-      }
-      return counts;
-    }, {});
+    const categoryCounts = products.reduce<Record<string, number>>(
+      (counts, product) => {
+        if (product.category) {
+          counts[product.category] = (counts[product.category] || 0) + 1;
+        }
+        return counts;
+      },
+      {},
+    );
 
     const sortedCategories = Object.entries(categoryCounts).sort(
       ([, aCount], [, bCount]) => bCount - aCount,
@@ -112,9 +126,19 @@ export default function HomeScreen() {
     badge?: string;
     route: QuickAccessRoute;
   }[] = [
-    { title: "My Orders", iconName: "assignment", badge: "2", route: "/orders" },
+    {
+      title: "My Orders",
+      iconName: "assignment",
+      badge: "2",
+      route: "/orders",
+    },
     { title: "Messages", iconName: "mail", badge: "5", route: "/profile" },
-    { title: "Wallet", iconName: "account-balance-wallet", badge: undefined, route: "/wallet" },
+    {
+      title: "Wallet",
+      iconName: "account-balance-wallet",
+      badge: undefined,
+      route: "/wallet",
+    },
     { title: "Help", iconName: "help", badge: undefined, route: "/profile" },
   ];
 
@@ -160,8 +184,8 @@ export default function HomeScreen() {
             ₱{(user?.ewallet || 0).toLocaleString()}
           </Text>
           <Text style={[styles.walletSub, { color: colors.textSecondary }]}>
-            {activeOrdersCount} active order{activeOrdersCount !== 1 ? "s" : ""} •{" "}
-            {totalProducts} products
+            {activeOrdersCount} active order{activeOrdersCount !== 1 ? "s" : ""}{" "}
+            • {totalProducts} products
           </Text>
         </View>
       </View>
@@ -178,13 +202,17 @@ export default function HomeScreen() {
                 Shadows.sm,
               ]}
             >
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.metricLabel, { color: colors.textSecondary }]}
+              >
                 {item.label}
               </Text>
               <Text style={[styles.metricValue, { color: colors.primary }]}>
                 {item.value}
               </Text>
-              <Text style={[styles.metricCaption, { color: colors.textSecondary }]}>
+              <Text
+                style={[styles.metricCaption, { color: colors.textSecondary }]}
+              >
                 {item.caption}
               </Text>
             </View>
@@ -199,7 +227,9 @@ export default function HomeScreen() {
             Platform Hubs
           </Text>
           <TouchableOpacity onPress={() => router.push("/(tabs)/browse")}>
-            <Text style={[styles.viewAll, { color: colors.primary }]}>Explore</Text>
+            <Text style={[styles.viewAll, { color: colors.primary }]}>
+              Explore
+            </Text>
           </TouchableOpacity>
         </View>
         <View style={styles.hubsContainer}>
@@ -253,14 +283,12 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <FlatList
-            data={categories
-              .slice(0, 8)
-              .map((cat, idx) => ({
-                id: idx.toString(),
-                name: cat,
-                icon: "local-grocery-store",
-                color: colors.primary,
-              }))}
+            data={categories.slice(0, 8).map((cat, idx) => ({
+              id: idx.toString(),
+              name: cat,
+              icon: "local-grocery-store",
+              color: colors.primary,
+            }))}
             renderItem={({ item }) => (
               <CategoryCard
                 id={item.id}
@@ -319,9 +347,7 @@ export default function HomeScreen() {
       {isLoading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
-          <Text
-            style={[styles.loadingText, { color: colors.textSecondary }]}
-          >
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
             Loading marketplace data...
           </Text>
         </View>
@@ -436,7 +462,7 @@ const styles = StyleSheet.create({
   },
   metricCaption: {
     fontSize: Typography.fontSizes.xs,
-    fontWeight: Typography.fontWeights.regular,
+    fontWeight: Typography.fontWeights.normal,
   },
 
   // ── Sections ─────────────────────────────────────────────────────────────
@@ -511,7 +537,7 @@ const styles = StyleSheet.create({
   },
   promoText: {
     fontSize: Typography.fontSizes.sm,
-    fontWeight: Typography.fontWeights.regular,
+    fontWeight: Typography.fontWeights.normal,
     lineHeight: 18,
     maxWidth: 200,
   },
